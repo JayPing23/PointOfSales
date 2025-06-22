@@ -19,6 +19,8 @@ from tkinter import ttk, messagebox, filedialog
 import datetime
 import uuid
 import os
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # --- CONFIGURATION & STYLING ---
 # Centralized configuration for easy customization
@@ -57,7 +59,7 @@ class POSApp:
         
         self.setup_styles()
         self.load_data()
-        self.create_widgets()
+        self.create_notebook()
 
     def setup_styles(self):
         """Configure all the ttk styles for the application."""
@@ -82,9 +84,21 @@ class POSApp:
         style.configure('Treeview.Heading', font=('Segoe UI', 11, 'bold'), padding=(10, 10))
         style.map('Treeview.Heading', relief=[('!active', 'flat')])
         
-    def create_widgets(self):
+    def create_notebook(self):
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill=tk.BOTH, expand=True)
+        # POS Tab
+        self.pos_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.pos_frame, text="Point of Sale")
+        self.create_widgets(self.pos_frame)
+        # Sales Summary Tab
+        self.summary_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.summary_frame, text="Sales Summary")
+        self.create_sales_summary(self.summary_frame)
+
+    def create_widgets(self, parent):
         """Create the main layout and widgets of the application."""
-        main_frame = ttk.Frame(self.root, padding=15)
+        main_frame = ttk.Frame(parent, padding=15)
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Configure grid layout
@@ -154,6 +168,47 @@ class POSApp:
         # Checkout button
         checkout_btn = ttk.Button(cart_container, text="Proceed to Checkout", command=self.checkout, style='Success.TButton')
         checkout_btn.grid(row=4, column=0, columnspan=2, sticky='ew', padx=10, pady=10, ipady=10)
+
+    def create_sales_summary(self, parent):
+        # Parse sales.txt and show summary stats and a matplotlib chart
+        import re
+        sales_file = CONFIG['sales_file']
+        sales = []
+        if os.path.exists(sales_file):
+            with open(sales_file, 'r') as f:
+                sale = {}
+                for line in f:
+                    if line.startswith('--- SALE START ---'):
+                        sale = {}
+                    elif line.startswith('ID: '):
+                        sale['id'] = line.split(': ',1)[1].strip()
+                    elif line.startswith('TIMESTAMP: '):
+                        sale['timestamp'] = line.split(': ',1)[1].strip()
+                    elif line.startswith('TOTAL: '):
+                        sale['total'] = float(line.split(': ',1)[1].strip())
+                    elif line.startswith('--- SALE END ---'):
+                        if sale:
+                            sales.append(sale)
+        # Stats
+        total_sales = sum(s['total'] for s in sales)
+        num_sales = len(sales)
+        ttk.Label(parent, text=f"Total Sales: {CONFIG['currency_symbol']}{total_sales:.2f}", font=('Segoe UI', 14, 'bold')).pack(pady=10)
+        ttk.Label(parent, text=f"Number of Transactions: {num_sales}", font=('Segoe UI', 12)).pack(pady=5)
+        # Chart
+        if sales:
+            dates = [datetime.datetime.fromisoformat(s['timestamp']) for s in sales]
+            totals = [s['total'] for s in sales]
+            fig, ax = plt.subplots(figsize=(7,4))
+            ax.plot(dates, totals, marker='o')
+            ax.set_title('Sales Over Time')
+            ax.set_xlabel('Date')
+            ax.set_ylabel('Total Sale')
+            fig.autofmt_xdate()
+            canvas = FigureCanvasTkAgg(fig, parent)
+            canvas.draw()
+            canvas.get_tk_widget().pack(pady=10, fill=tk.BOTH, expand=True)
+        else:
+            ttk.Label(parent, text="No sales data available.").pack(pady=20)
 
     # --- DATA HANDLING ---
     def load_data(self, filepath=None):
@@ -335,8 +390,7 @@ class POSApp:
 
     # --- PRODUCT MANAGEMENT ---
     def manage_products(self):
-        """Open the product management window."""
-        ProductManager(self.root, self.products, self.refresh_main_window)
+        ProductManager(self.root, self.products, self.refresh_main_window, self.save_products)
 
     def refresh_main_window(self):
         """Callback to refresh the main window after product changes."""
@@ -349,26 +403,24 @@ class ProductManager(tk.Toplevel):
     # This class would contain the full CRUD for products
     # For brevity in this single file, a simplified version is shown.
     # A full implementation would have its own Add/Edit dialogs.
-    def __init__(self, parent, products, refresh_callback):
+    def __init__(self, parent, products, refresh_callback, save_callback):
         super().__init__(parent)
         self.title("Product Management")
         self.geometry("800x600")
         self.transient(parent)
         self.grab_set()
-
         self.products = products
         self.refresh_callback = refresh_callback
-        
+        self.save_callback = save_callback
         self.create_prod_widgets()
 
     def create_prod_widgets(self):
-        # Frame for buttons
         btn_frame = ttk.Frame(self, padding=10)
         btn_frame.pack(fill='x')
-        
         ttk.Button(btn_frame, text="Add New Product", command=self.add_product).pack(side='left', padx=5)
         ttk.Button(btn_frame, text="Edit Selected", command=self.edit_product).pack(side='left', padx=5)
         ttk.Button(btn_frame, text="Delete Selected", command=self.delete_product, style="Danger.TButton").pack(side='left', padx=5)
+        ttk.Button(btn_frame, text="Import Products", command=self.import_products).pack(side='left', padx=5)
         ttk.Button(btn_frame, text="Save to File", command=self.save, style="Success.TButton").pack(side='right', padx=5)
 
         # Treeview to display products
@@ -397,7 +449,14 @@ class ProductManager(tk.Toplevel):
         self.refresh_prod_list()
 
     def edit_product(self):
-        messagebox.showinfo("Info", "Edit functionality would be here.")
+        selected = self.prod_tree.selection()
+        if not selected:
+            messagebox.showwarning("No Selection", "Please select a product to edit.")
+            return
+        item_id = selected[0]
+        values = self.prod_tree.item(item_id, 'values')
+        # Show edit dialog
+        EditProductDialog(self, values, self.update_product)
 
     def delete_product(self):
         selected = self.prod_tree.selection()
@@ -412,14 +471,102 @@ class ProductManager(tk.Toplevel):
             self.refresh_prod_list()
 
     def save(self):
-        # This now calls the main app's save method to ensure consistency
-        app = self.master.master.master # Need to get back to the POSApp instance
-        if app.save_products():
+        if self.save_callback():
             messagebox.showinfo("Success", "Products saved successfully.")
-            self.refresh_callback() # Refresh the main window display
+            self.refresh_callback()
         else:
-             messagebox.showerror("Error", "Failed to save products.")
+            messagebox.showerror("Error", "Failed to save products.")
 
+    def update_product(self, old_id, new_data):
+        for p in self.products:
+            if p['id'] == old_id:
+                p['id'] = new_data['id']
+                p['name'] = new_data['name']
+                p['price'] = float(new_data['price'])
+                p['stock'] = int(new_data['stock'])
+                break
+        self.refresh_prod_list()
+
+    def import_products(self):
+        file_path = filedialog.askopenfilename(title="Import Products", filetypes=[("Text Files", "*.txt"), ("JSON Files", "*.json"), ("All Files", "*.*")])
+        if not file_path:
+            return
+        try:
+            imported = 0
+            # Try JSON first
+            if file_path.endswith('.json') or file_path.endswith('.txt'):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    try:
+                        import json
+                        data = json.load(f)
+                        if isinstance(data, list):
+                            for item in data:
+                                prod_id = item.get('product_id') or item.get('id') or f"prod_{uuid.uuid4().hex[:4]}"
+                                name = item.get('name', 'Unknown')
+                                price = float(item.get('price', 0.0))
+                                stock = int(item.get('stock', item.get('quantity', 0)))
+                                if not any(p['id'] == prod_id for p in self.products):
+                                    self.products.append({'id': prod_id, 'name': name, 'price': price, 'stock': stock})
+                                    imported += 1
+                            self.refresh_prod_list()
+                            self.save_callback()
+                            self.refresh_callback()
+                            messagebox.showinfo("Import Complete", f"Imported {imported} products from JSON.")
+                            return
+                    except Exception:
+                        pass  # Not JSON, try as text
+            # Try pipe-delimited text
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if not line.strip(): continue
+                    parts = line.strip().split('|')
+                    if len(parts) >= 4:
+                        prod_id, name, price, stock = parts[:4]
+                        if not any(p['id'] == prod_id for p in self.products):
+                            self.products.append({'id': prod_id, 'name': name, 'price': float(price), 'stock': int(stock)})
+                            imported += 1
+                self.refresh_prod_list()
+                self.save_callback()
+                self.refresh_callback()
+                messagebox.showinfo("Import Complete", f"Imported {imported} products from text file.")
+        except Exception as e:
+            messagebox.showerror("Import Error", f"Failed to import products: {e}")
+
+class EditProductDialog(tk.Toplevel):
+    def __init__(self, parent, values, callback):
+        super().__init__(parent)
+        self.title("Edit Product")
+        self.geometry("400x300")
+        self.transient(parent)
+        self.grab_set()
+        self.callback = callback
+        self.old_id = values[0]
+        tk.Label(self, text="Product ID:").pack(pady=5)
+        self.id_entry = tk.Entry(self)
+        self.id_entry.pack(pady=5)
+        self.id_entry.insert(0, values[0])
+        tk.Label(self, text="Name:").pack(pady=5)
+        self.name_entry = tk.Entry(self)
+        self.name_entry.pack(pady=5)
+        self.name_entry.insert(0, values[1])
+        tk.Label(self, text="Price:").pack(pady=5)
+        self.price_entry = tk.Entry(self)
+        self.price_entry.pack(pady=5)
+        self.price_entry.insert(0, values[2])
+        tk.Label(self, text="Stock:").pack(pady=5)
+        self.stock_entry = tk.Entry(self)
+        self.stock_entry.pack(pady=5)
+        self.stock_entry.insert(0, values[3])
+        ttk.Button(self, text="Save", command=self.save).pack(pady=15)
+    def save(self):
+        new_data = {
+            'id': self.id_entry.get(),
+            'name': self.name_entry.get(),
+            'price': self.price_entry.get(),
+            'stock': self.stock_entry.get()
+        }
+        self.callback(self.old_id, new_data)
+        self.destroy()
 
 class PaymentDialog(tk.Toplevel):
     """Dialog for entering cash tendered and calculating change."""

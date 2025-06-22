@@ -1,10 +1,11 @@
 prod_1001|Cafe Latte|4.5|100
 prod_1002|Cappuccino|4.75|100
-prod_1003|Espresso|3.0|150
+prod_1003|Espresso|3.0|148
 prod_1004|Americano|3.5|100
 prod_1005|Mocha|5.0|80
-prod_1006|Iced Coffee|4.0|100
-item_2001|Croissant|2.75|50
+prod_1006|Iced Coffee|4.0|99
+item_2001|Croissant|2.75|48
 item_2002|Muffin|3.25|60
 item_2003|Brownie|3.5|40
-item_2004|Sandwich|7.5|30 
+item_2004|Sandwich|7.5|28
+prod_a6f6|New Product|0.0|0

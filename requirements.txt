@@ -1,16 +1,7 @@
-# Point of Sales System Dependencies
-
-# Core Python packages
-tkinter  # Usually comes with Python installation
-json     # Built-in module
-csv      # Built-in module
-os       # Built-in module
-datetime # Built-in module
-typing   # Built-in module
-
-# Data visualization
-matplotlib>=3.5.0
+# Requirements for Point of Sale System
+matplotlib>=3.8.0
 numpy>=1.21.0
+# Add any other pip-installable dependencies below
 
 # Optional: For enhanced UI (if available)
 # pillow>=8.0.0  # For image handling

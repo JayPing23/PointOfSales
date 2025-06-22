@@ -1,1 +1,12 @@
-[] 
+[] --- SALE START ---
+ID: 80a0ecea-2a8c-4bf0-89fa-0091c6b5346e
+TIMESTAMP: 2025-06-22T17:56:26.482010
+ITEM: prod_1003|Espresso|2|3.0
+ITEM: item_2001|Croissant|2|2.75
+ITEM: item_2004|Sandwich|2|7.5
+ITEM: prod_1006|Iced Coffee|1|4.0
+SUBTOTAL: 30.50
+TOTAL: 32.94
+TENDERED: 100.00
+--- SALE END ---
+
