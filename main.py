@@ -18,14 +18,15 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import datetime
 import uuid
+import os
 
 # --- CONFIGURATION & STYLING ---
 # Centralized configuration for easy customization
 CONFIG = {
     "tax_rate": 0.08,  # 8% sales tax
     "currency_symbol": "$",
-    "products_file": "products.txt",
-    "sales_file": "sales.txt",
+    "products_file": os.path.join('datas', 'products.txt'),
+    "sales_file": os.path.join('datas', 'sales.txt'),
 }
 
 # Modern color scheme for a professional look

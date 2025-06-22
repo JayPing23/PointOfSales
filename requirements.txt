@@ -1,0 +1,22 @@
+# Point of Sales System Dependencies
+
+# Core Python packages
+tkinter  # Usually comes with Python installation
+json     # Built-in module
+csv      # Built-in module
+os       # Built-in module
+datetime # Built-in module
+typing   # Built-in module
+
+# Data visualization
+matplotlib>=3.5.0
+numpy>=1.21.0
+
+# Optional: For enhanced UI (if available)
+# pillow>=8.0.0  # For image handling
+# requests>=2.25.0  # For web integration
+
+# Development dependencies (optional)
+# pytest>=6.0.0  # For testing
+# black>=21.0.0  # For code formatting
+# flake8>=3.8.0  # For linting 
