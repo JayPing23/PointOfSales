@@ -3,12 +3,17 @@
 A modern, modular, and user-friendly Point of Sale application built with Python and Tkinter. Designed for small businesses to manage sales, products, and reporting with a beautiful GUI and robust features.
 
 ## Features
-- **Product Management:** Add, edit, delete, and import products with automatic product ID generation and description fields
+- **Product Management:** Add, edit, delete, import, and batch-delete products with automatic product ID generation and description fields
+- **Batch Actions:** Multi-select products in the product manager using checkboxes for batch deletion (and future batch actions)
 - **Two-Level Category System:** Main and subcategories for all items, with persistent custom categories, color-coding, and icons
 - **POS Interface:** Touch-friendly product grid, cart, and checkout
-- **Sales Summary:** Tabbed dashboard with charts and stats (matplotlib)
+- **Low Stock Alerts:** Products with low stock are highlighted in red in both the main grid and product manager
+- **Sales Summary:** Tabbed dashboard with charts, stats, and a clickable sales log (matplotlib)
+- **Export Sales Log:** Export the sales log to CSV directly from the Sales Summary tab
+- **Analytics Tab:** View top-selling products, sales by type, and sales by day
 - **Data Persistence:** All data stored in `datas/` (NoSQL-style: JSON, TXT, CSV, YAML supported)
 - **Multi-Format Import/Export:** Load and save data in JSON, TXT, CSV, YAML; auto-detect file type; export/import for IMS
+- **Active File Display:** The currently active products file is always shown in the IMS Sync tab
 - **IMS Sync:** Import/export tangible items to/from Inventory Management System
 - **Category Manager:** Hierarchical UI for managing categories, colors, and icons
 - **Robust File Handling:** User-friendly error handling, auto-backup, and format conversion
@@ -52,12 +57,14 @@ python main.py
 
 ## Usage Guide
 - All data is saved in the `datas/` folder. Demo data for various business types is included.
-- Use the **Manage Products** button to add/edit/delete/import products. Products support main/subcategory, color, and icon.
+- Use the **Manage Products** button to add/edit/delete/import products. Use the checkboxes to select multiple products for batch deletion.
 - Use the **Category Manager** (in product dialogs) to add/rename/delete categories, set colors/icons, and manage custom categories.
-- Use the **Sales Summary** tab for analytics and charts.
-- Use the **IMS Sync** tab to import/export tangible items to/from the Inventory Management System.
+- Use the **Sales Summary** tab for analytics, charts, and to export the sales log to CSV. Double-click a sale to view its receipt.
+- Use the **Analytics** tab to view top-selling products, sales by type, and sales by day.
+- Use the **IMS Sync** tab to import/export tangible items to/from the Inventory Management System. The currently active products file is always displayed here.
 - Data files can be loaded/saved in JSON, TXT, CSV, or YAML. The system auto-detects file type.
 - All demo data files are available in JSON format for easy import/export.
+- Products with low stock (≤ 5) are highlighted in red for easy restocking.
 
 ## Data Format
 - Products are stored as JSON objects with fields: `product_id`, `name`, `category_main`, `category_sub`, `type`, `price`, `stock`, `unit`, `description`, etc.

@@ -22,6 +22,11 @@ import os
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import json
+import csv
+import collections
+
+# File path for user-defined custom categories
+CUSTOM_CATEGORIES_FILE = os.path.join('datas', 'custom_categories.json')
 
 # --- Unified Category List ---
 CATEGORIES = [
@@ -115,8 +120,8 @@ class POSApp:
         self.product_buttons = []
         
         self.setup_styles()
-        self.load_data()
         self.create_notebook()
+        self.load_data()
 
     def setup_styles(self):
         """Configure all the ttk styles for the application."""
@@ -152,6 +157,10 @@ class POSApp:
         self.summary_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.summary_frame, text="Sales Summary")
         self.create_sales_summary(self.summary_frame)
+        # Analytics Tab
+        self.analytics_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.analytics_frame, text="Analytics")
+        self.create_analytics_tab(self.analytics_frame)
         # IMS Sync Tab
         self.sync_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.sync_frame, text="IMS Sync")
@@ -231,31 +240,62 @@ class POSApp:
         checkout_btn.grid(row=4, column=0, columnspan=2, sticky='ew', padx=10, pady=10, ipady=10)
 
     def create_sales_summary(self, parent):
-        # Parse sales.txt and show summary stats and a matplotlib chart
+        """
+        Create the Sales Summary tab UI:
+        - Show total sales, number of transactions, and a sales-over-time chart.
+        - Show a clickable log of all sales (Treeview).
+        - Clicking a sale shows the full receipt in a popup.
+        """
         import re
+        from tkinter import ttk
         sales_file = CONFIG['sales_file']
         sales = []
+        # --- Parse sales.txt for all sales ---
         if os.path.exists(sales_file):
             with open(sales_file, 'r') as f:
                 sale = {}
+                items = []
                 for line in f:
                     if line.startswith('--- SALE START ---'):
                         sale = {}
+                        items = []
                     elif line.startswith('ID: '):
-                        sale['id'] = line.split(': ',1)[1].strip()
+                        sale['sale_id'] = line.split(': ',1)[1].strip()
                     elif line.startswith('TIMESTAMP: '):
                         sale['timestamp'] = line.split(': ',1)[1].strip()
+                    elif line.startswith('ITEM: '):
+                        # Parse item line: id|name|qty|price|type|unit (type/unit optional)
+                        parts = line.split(': ',1)[1].strip().split('|')
+                        item = {
+                            'id': parts[0] if len(parts) > 0 else '',
+                            'name': parts[1] if len(parts) > 1 else '',
+                            'quantity': int(parts[2]) if len(parts) > 2 else 0,
+                            'price': float(parts[3]) if len(parts) > 3 else 0.0,
+                            'type': parts[4] if len(parts) > 4 else 'product',
+                            'unit': parts[5] if len(parts) > 5 else '',
+                        }
+                        items.append(item)
+                    elif line.startswith('SUBTOTAL: '):
+                        sale['subtotal'] = float(line.split(': ',1)[1].strip())
                     elif line.startswith('TOTAL: '):
                         sale['total'] = float(line.split(': ',1)[1].strip())
+                    elif line.startswith('TENDERED: '):
+                        sale['cash_tendered'] = float(line.split(': ',1)[1].strip())
                     elif line.startswith('--- SALE END ---'):
                         if sale:
+                            sale['items'] = items.copy()
+                            # Calculate tax if possible
+                            if 'total' in sale and 'subtotal' in sale:
+                                sale['tax'] = sale['total'] - sale['subtotal']
+                            else:
+                                sale['tax'] = 0.0
                             sales.append(sale)
-        # Stats
+        # --- Stats ---
         total_sales = sum(s['total'] for s in sales)
         num_sales = len(sales)
         ttk.Label(parent, text=f"Total Sales: {CONFIG['currency_symbol']}{total_sales:.2f}", font=('Segoe UI', 14, 'bold')).pack(pady=10)
         ttk.Label(parent, text=f"Number of Transactions: {num_sales}", font=('Segoe UI', 12)).pack(pady=5)
-        # Chart
+        # --- Chart ---
         if sales:
             dates = [datetime.datetime.fromisoformat(s['timestamp']) for s in sales]
             totals = [s['total'] for s in sales]
@@ -270,9 +310,144 @@ class POSApp:
             canvas.get_tk_widget().pack(pady=10, fill=tk.BOTH, expand=True)
         else:
             ttk.Label(parent, text="No sales data available.").pack(pady=20)
+            return
+        # --- Sales Log (Treeview) ---
+        log_frame = ttk.Frame(parent)
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        ttk.Label(log_frame, text="Sales Log (click to view receipt)", font=('Segoe UI', 12, 'bold')).pack(anchor='w')
+        columns = ("sale_id", "timestamp", "total", "num_items")
+        tree = ttk.Treeview(log_frame, columns=columns, show='headings', height=8)
+        tree.heading("sale_id", text="Sale ID")
+        tree.heading("timestamp", text="Date/Time")
+        tree.heading("total", text="Total")
+        tree.heading("num_items", text="# Items")
+        tree.column("sale_id", width=120)
+        tree.column("timestamp", width=160)
+        tree.column("total", width=80, anchor='e')
+        tree.column("num_items", width=80, anchor='center')
+        # Insert sales into the log
+        for sale in sales:
+            tree.insert('', 'end', values=(
+                sale.get('sale_id', '')[:8],
+                sale.get('timestamp', '')[:19],
+                f"{CONFIG['currency_symbol']}{sale.get('total', 0.0):.2f}",
+                len(sale.get('items', []))
+            ))
+        tree.pack(fill=tk.BOTH, expand=True, pady=5)
+        # --- Click handler to show receipt ---
+        def on_log_click(event):
+            selected = tree.focus()
+            if not selected:
+                return
+            idx = tree.index(selected)
+            if 0 <= idx < len(sales):
+                sale = sales[idx]
+                # Build sale_record for ReceiptWindow
+                sale_record = {
+                    "sale_id": sale.get('sale_id', ''),
+                    "timestamp": sale.get('timestamp', ''),
+                    "items": sale.get('items', []),
+                    "subtotal": sale.get('subtotal', 0.0),
+                    "tax": sale.get('tax', 0.0),
+                    "total": sale.get('total', 0.0),
+                    "cash_tendered": sale.get('cash_tendered', 0.0)
+                }
+                ReceiptWindow(self.root, sale_record)
+        tree.bind('<Double-1>', on_log_click)
+        # Add a note for the user
+        ttk.Label(log_frame, text="Double-click a row to view the full receipt.", font=('Segoe UI', 9, 'italic')).pack(anchor='w', pady=(2,0))
+        # Add Export to CSV button
+        def export_sales_log():
+            file_path = filedialog.asksaveasfilename(title="Export Sales Log", defaultextension=".csv", filetypes=[("CSV Files", "*.csv")])
+            if not file_path:
+                return
+            import csv
+            with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Sale ID", "Timestamp", "Total", "# Items"])
+                for sale in sales:
+                    writer.writerow([
+                        sale.get('sale_id', '')[:8],
+                        sale.get('timestamp', '')[:19],
+                        f"{CONFIG['currency_symbol']}{sale.get('total', 0.0):.2f}",
+                        len(sale.get('items', []))
+                    ])
+            messagebox.showinfo("Export Complete", f"Sales log exported to {os.path.basename(file_path)}")
+        export_btn = ttk.Button(log_frame, text="Export Sales Log to CSV", command=export_sales_log)
+        export_btn.pack(anchor='e', pady=(5,0))
+
+    def create_analytics_tab(self, parent):
+        """Create the analytics tab: top-selling products, sales by category, and sales by time period."""
+        sales_file = CONFIG['sales_file']
+        sales = []
+        if os.path.exists(sales_file):
+            with open(sales_file, 'r') as f:
+                sale = {}
+                items = []
+                for line in f:
+                    if line.startswith('--- SALE START ---'):
+                        sale = {}
+                        items = []
+                    elif line.startswith('ID: '):
+                        sale['sale_id'] = line.split(': ',1)[1].strip()
+                    elif line.startswith('TIMESTAMP: '):
+                        sale['timestamp'] = line.split(': ',1)[1].strip()
+                    elif line.startswith('ITEM: '):
+                        parts = line.split(': ',1)[1].strip().split('|')
+                        item = {
+                            'id': parts[0] if len(parts) > 0 else '',
+                            'name': parts[1] if len(parts) > 1 else '',
+                            'quantity': int(parts[2]) if len(parts) > 2 else 0,
+                            'price': float(parts[3]) if len(parts) > 3 else 0.0,
+                            'type': parts[4] if len(parts) > 4 else 'product',
+                            'unit': parts[5] if len(parts) > 5 else '',
+                        }
+                        items.append(item)
+                    elif line.startswith('--- SALE END ---'):
+                        if sale:
+                            sale['items'] = items.copy()
+                            sales.append(sale)
+        # Top-selling products
+        product_counter = collections.Counter()
+        for sale in sales:
+            for item in sale.get('items', []):
+                product_counter[item['name']] += item['quantity']
+        top_products = product_counter.most_common(10)
+        ttk.Label(parent, text="Top-Selling Products", font=('Segoe UI', 12, 'bold')).pack(pady=(10,0))
+        tree1 = ttk.Treeview(parent, columns=("Product", "Quantity"), show='headings', height=6)
+        tree1.heading("Product", text="Product")
+        tree1.heading("Quantity", text="Quantity Sold")
+        for name, qty in top_products:
+            tree1.insert('', 'end', values=(name, qty))
+        tree1.pack(fill=tk.X, padx=20, pady=5)
+        # Sales by category
+        category_counter = collections.Counter()
+        for sale in sales:
+            for item in sale.get('items', []):
+                category_counter[item.get('type', 'product')] += item['quantity']
+        ttk.Label(parent, text="Sales by Type", font=('Segoe UI', 12, 'bold')).pack(pady=(10,0))
+        tree2 = ttk.Treeview(parent, columns=("Type", "Quantity"), show='headings', height=6)
+        tree2.heading("Type", text="Type")
+        tree2.heading("Quantity", text="Quantity Sold")
+        for cat, qty in category_counter.items():
+            tree2.insert('', 'end', values=(cat, qty))
+        tree2.pack(fill=tk.X, padx=20, pady=5)
+        # Sales by time period (day)
+        date_counter = collections.Counter()
+        for sale in sales:
+            date = sale.get('timestamp', '')[:10]
+            total = sale.get('total', 0.0)
+            date_counter[date] += total
+        ttk.Label(parent, text="Sales by Day", font=('Segoe UI', 12, 'bold')).pack(pady=(10,0))
+        tree3 = ttk.Treeview(parent, columns=("Date", "Total Sales"), show='headings', height=6)
+        tree3.heading("Date", text="Date")
+        tree3.heading("Total Sales", text="Total Sales")
+        for date, total in sorted(date_counter.items()):
+            tree3.insert('', 'end', values=(date, f"{CONFIG['currency_symbol']}{total:.2f}"))
+        tree3.pack(fill=tk.X, padx=20, pady=5)
 
     def create_sync_tab(self, parent):
-        """Create IMS sync tab for import/export tangible items."""
+        """Create IMS sync tab for import/export tangible items and show current active products file."""
         frame = ttk.Frame(parent, padding=20)
         frame.pack(fill=tk.BOTH, expand=True)
         ttk.Label(frame, text="IMS ↔ POS Sync", font=('Segoe UI', 14, 'bold')).pack(pady=10)
@@ -280,159 +455,211 @@ class POSApp:
         ttk.Button(frame, text="Export Tangible Items to IMS", command=self.export_to_ims).pack(pady=10)
         self.sync_status = tk.StringVar(value="Ready.")
         ttk.Label(frame, textvariable=self.sync_status, font=('Segoe UI', 10)).pack(pady=10)
+        # Show current active products file
+        self.active_file_var = tk.StringVar(value=f"Active Products File: {os.path.basename(CONFIG['products_file'])}")
+        self.active_file_label = ttk.Label(frame, textvariable=self.active_file_var, font=('Segoe UI', 9, 'italic'))
+        self.active_file_label.pack(pady=(10,0))
 
     def import_from_ims(self):
-        """Import tangible items (type == 'product') from IMS JSON or TXT file."""
-        file_path = filedialog.askopenfilename(title="Import from IMS", filetypes=[("JSON Files", "*.json"), ("Text Files", "*.txt"), ("All Files", "*.*")])
+        """Import items from IMS in any supported format, accepting all item types and fields."""
+        file_path = filedialog.askopenfilename(title="Import from IMS", filetypes=[("All Supported", "*.json *.txt *.csv *.yaml *.yml"), ("All Files", "*.*")])
         if not file_path:
             return
-        try:
-            imported = 0
-            if file_path.endswith('.json'):
-                import json
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    if isinstance(data, list):
-                        for item in data:
-                            if item.get('type', 'product') == 'product':
-                                prod_id = item.get('id') or item.get('product_id') or f"prod_{uuid.uuid4().hex[:8]}"
-                                name = item.get('name', 'Unknown')
-                                category = item.get('category', '')
-                                price = float(item.get('price', 0.0))
-                                stock = int(item.get('stock', 0))
-                                unit = item.get('unit', 'pcs')
-                                description = item.get('description', '')
-                                if not any(p['id'] == prod_id for p in self.products):
-                                    self.products.append({'id': prod_id, 'name': name, 'category': category, 'type': 'product', 'price': price, 'stock': stock, 'unit': unit, 'description': description})
-                                    imported += 1
-            else:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        if not line.strip(): continue
-                        parts = line.strip().split('|')
-                        if len(parts) >= 8 and parts[3] == 'product':
-                            prod_id, name, category, type_, price, stock, unit, description = parts[:8]
-                            if not any(p['id'] == prod_id for p in self.products):
-                                self.products.append({'id': prod_id, 'name': name, 'category': category, 'type': 'product', 'price': float(price), 'stock': int(stock), 'unit': unit, 'description': description})
-                                imported += 1
-            self.save_products()
-            self.refresh_main_window()
-            self.sync_status.set(f"Imported {imported} tangible items from IMS.")
-        except Exception as e:
-            self.sync_status.set(f"Import failed: {e}")
+        self.load_data(file_path)
+        self.save_products()  # Save to current file for persistence
+        self.refresh_main_window()
+        self.sync_status.set(f"Imported items from {os.path.basename(file_path)}.")
 
     def export_to_ims(self):
-        """Export current tangible items (type == 'product') to IMS as JSON or TXT."""
-        file_path = filedialog.asksaveasfilename(title="Export to IMS", filetypes=[("JSON Files", "*.json"), ("Text Files", "*.txt"), ("All Files", "*.*")], defaultextension=".json")
+        """Export all items to IMS in any supported format, including all fields."""
+        file_path = filedialog.asksaveasfilename(title="Export to IMS", filetypes=[("JSON Files", "*.json"), ("Text Files", "*.txt"), ("CSV Files", "*.csv"), ("YAML Files", "*.yaml;*.yml"), ("All Files", "*.*")], defaultextension=".json")
         if not file_path:
             return
-        try:
-            tangible = [p for p in self.products if p.get('type', 'product') == 'product']
-            if file_path.endswith('.json'):
-                import json
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(tangible, f, indent=4)
-            else:
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    for p in tangible:
-                        line = f"{p['id']}|{p['name']}|{p.get('category','')}|product|{p.get('price',0.0)}|{p.get('stock',0)}|{p.get('unit','pcs')}|{p.get('description','')}\n"
-                        f.write(line)
-            self.sync_status.set(f"Exported {len(tangible)} tangible items to IMS.")
-        except Exception as e:
-            self.sync_status.set(f"Export failed: {e}")
+        self.save_products(file_path)
+        self.sync_status.set(f"Exported items to {os.path.basename(file_path)}.")
 
     # --- DATA HANDLING ---
     def load_data(self, filepath=None):
-        """Load products from a pipe-delimited TXT file or JSON file."""
-        self.products.clear()
+        """Load products/items from JSON, TXT, CSV, or YAML. Accepts all item types and field variants."""
+        import csv
         try:
+            self.products.clear()
             path = filepath or CONFIG['products_file']
             if path.endswith('.json'):
-                import json
                 with open(path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     for item in data:
+                        # Accept both 'id' and 'product_id', and all category fields
+                        prod_id = item.get('id') or item.get('product_id') or f"prod_{uuid.uuid4().hex[:8]}"
+                        name = item.get('name', 'Unknown')
+                        category = item.get('category', '')
+                        category_main = item.get('category_main', category)
+                        category_sub = item.get('category_sub', '')
+                        type_ = item.get('type', 'product')
+                        price = float(item.get('price', 0.0))
+                        stock = int(item.get('stock', 0))
+                        unit = item.get('unit', 'pcs')
+                        description = item.get('description', '')
                         self.products.append({
-                            'id': item.get('id') or item.get('product_id'),
-                            'name': item.get('name', ''),
-                            'category': item.get('category', ''),
-                            'type': item.get('type', 'product'),
-                            'price': float(item.get('price', 0.0)),
-                            'stock': int(item.get('stock', 0)),
-                            'unit': item.get('unit', 'pcs'),
-                            'description': item.get('description', '')
+                            'id': prod_id,
+                            'name': name,
+                            'category': category,
+                            'category_main': category_main,
+                            'category_sub': category_sub,
+                            'type': type_,
+                            'price': price,
+                            'stock': stock,
+                            'unit': unit,
+                            'description': description
+                        })
+            elif path.endswith('.csv'):
+                with open(path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for item in reader:
+                        prod_id = item.get('id') or item.get('product_id') or f"prod_{uuid.uuid4().hex[:8]}"
+                        name = item.get('name', 'Unknown')
+                        category = item.get('category', '')
+                        category_main = item.get('category_main', category)
+                        category_sub = item.get('category_sub', '')
+                        type_ = item.get('type', 'product')
+                        price = float(item.get('price', 0.0))
+                        stock = int(item.get('stock', 0))
+                        unit = item.get('unit', 'pcs')
+                        description = item.get('description', '')
+                        self.products.append({
+                            'id': prod_id,
+                            'name': name,
+                            'category': category,
+                            'category_main': category_main,
+                            'category_sub': category_sub,
+                            'type': type_,
+                            'price': price,
+                            'stock': stock,
+                            'unit': unit,
+                            'description': description
+                        })
+            elif path.endswith('.yaml') or path.endswith('.yml'):
+                import yaml
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = yaml.safe_load(f)
+                    for item in data:
+                        prod_id = item.get('id') or item.get('product_id') or f"prod_{uuid.uuid4().hex[:8]}"
+                        name = item.get('name', 'Unknown')
+                        category = item.get('category', '')
+                        category_main = item.get('category_main', category)
+                        category_sub = item.get('category_sub', '')
+                        type_ = item.get('type', 'product')
+                        price = float(item.get('price', 0.0))
+                        stock = int(item.get('stock', 0))
+                        unit = item.get('unit', 'pcs')
+                        description = item.get('description', '')
+                        self.products.append({
+                            'id': prod_id,
+                            'name': name,
+                            'category': category,
+                            'category_main': category_main,
+                            'category_sub': category_sub,
+                            'type': type_,
+                            'price': price,
+                            'stock': stock,
+                            'unit': unit,
+                            'description': description
                         })
             else:
+                # TXT fallback: pipe-delimited, legacy and new format
                 with open(path, 'r', encoding='utf-8') as f:
                     for line in f:
                         if not line.strip(): continue
                         parts = line.strip().split('|')
-                        # Legacy: id|name|price|stock
                         if len(parts) == 4:
+                            prod_id, name, price, stock = parts[:4]
                             self.products.append({
-                                'id': parts[0],
-                                'name': parts[1],
+                                'id': prod_id,
+                                'name': name,
                                 'category': '',
+                                'category_main': '',
+                                'category_sub': '',
                                 'type': 'product',
-                                'price': float(parts[2]),
-                                'stock': int(parts[3]),
+                                'price': float(price),
+                                'stock': int(stock),
                                 'unit': 'pcs',
                                 'description': ''
                             })
-                        # New: id|name|category|type|price|stock|unit|description
                         elif len(parts) >= 8:
+                            prod_id, name, category, type_, price, stock, unit, description = parts[:8]
                             self.products.append({
-                                'id': parts[0],
-                                'name': parts[1],
-                                'category': parts[2],
-                                'type': parts[3],
-                                'price': float(parts[4]),
-                                'stock': int(parts[5]),
-                                'unit': parts[6],
-                                'description': parts[7]
+                                'id': prod_id,
+                                'name': name,
+                                'category': category,
+                                'category_main': category,
+                                'category_sub': '',
+                                'type': type_,
+                                'price': float(price),
+                                'stock': int(stock),
+                                'unit': unit,
+                                'description': description
                             })
-            CONFIG['products_file'] = path # Update current file
-        except (FileNotFoundError) as e:
-            messagebox.showerror("Error Loading Data", f"Products file not found: {e}\nStarting with an empty product list.")
-        except (IndexError, ValueError) as e:
-            messagebox.showerror("Data Format Error", f"Could not parse products file: {e}\nCheck for malformed lines.")
+            CONFIG['products_file'] = path
+            # Update the active file label if it exists
+            if hasattr(self, 'active_file_var'):
+                self.active_file_var.set(f"Active Products File: {os.path.basename(CONFIG['products_file'])}")
+        except Exception as e:
+            messagebox.showerror("Error Loading Data", f"Could not load products: {e}")
+        self.update_product_display()
 
     def save_products(self, filepath=None):
-        """Save the current product list to a pipe-delimited TXT file."""
+        """Save the current product list to JSON, TXT, CSV, or YAML, including all fields. Always save to the active file unless a new path is given."""
+        import csv
         try:
             path = filepath or CONFIG['products_file']
             if path.endswith('.json'):
-                import json
                 with open(path, 'w', encoding='utf-8') as f:
                     json.dump(self.products, f, indent=4)
+            elif path.endswith('.csv'):
+                with open(path, 'w', encoding='utf-8', newline='') as f:
+                    fieldnames = ['id','name','category','category_main','category_sub','type','price','stock','unit','description']
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    for product in self.products:
+                        writer.writerow(product)
+            elif path.endswith('.yaml') or path.endswith('.yml'):
+                import yaml
+                with open(path, 'w', encoding='utf-8') as f:
+                    yaml.safe_dump(self.products, f, allow_unicode=True)
             else:
                 with open(path, 'w', encoding='utf-8') as f:
                     for product in self.products:
-                        # Save all fields pipe-delimited
                         line = f"{product['id']}|{product['name']}|{product.get('category','')}|{product.get('type','product')}|{product.get('price',0.0)}|{product.get('stock',0)}|{product.get('unit','pcs')}|{product.get('description','')}\n"
-                    f.write(line)
+                        f.write(line)
             CONFIG['products_file'] = path
+            # Update the active file label if it exists
+            if hasattr(self, 'active_file_var'):
+                self.active_file_var.set(f"Active Products File: {os.path.basename(CONFIG['products_file'])}")
             return True
         except Exception as e:
-            messagebox.showerror("Error Saving Data", f"Could not save products file: {e}")
+            messagebox.showerror("Error Saving Data", f"Could not save products: {e}")
             return False
 
     # --- PRODUCT DISPLAY ---
     def update_product_display(self):
-        """Clear and recreate the product buttons."""
+        """Clear and recreate the product buttons. Highlight low stock products."""
         for button in self.product_buttons:
             button.destroy()
         self.product_buttons.clear()
 
         row, col = 0, 0
         for product in self.products:
+            # Highlight low stock (threshold = 5)
+            low_stock = product.get('type', 'product') == 'product' and product.get('stock', 0) <= 5
+            btn_bg = COLORS['danger'] if low_stock else COLORS['product_bg']
+            btn_fg = COLORS['white'] if low_stock else COLORS['dark_text']
             btn = tk.Button(self.products_frame, 
                             text=f"{product['name']}\n{CONFIG['currency_symbol']}{product['price']:.2f}",
                             font=('Segoe UI', 10), 
                             wraplength=120,
                             justify='center',
-                            bg=COLORS['product_bg'],
-                            fg=COLORS['dark_text'],
+                            bg=btn_bg,
+                            fg=btn_fg,
                             relief='flat',
                             activebackground=COLORS['primary'],
                             activeforeground=COLORS['white'],
@@ -440,7 +667,6 @@ class POSApp:
             btn.grid(row=row, column=col, sticky='nsew', padx=5, pady=5, ipadx=10, ipady=10)
             self.products_frame.grid_columnconfigure(col, weight=1)
             self.product_buttons.append(btn)
-            
             col += 1
             if col > 3:
                 col = 0
@@ -579,7 +805,7 @@ class POSApp:
 
 # --- HELPER DIALOGS & WINDOWS ---
 class ProductManager(tk.Toplevel):
-    """A Toplevel window for managing the product list."""
+    """A Toplevel window for managing the product list with multi-select checkboxes."""
     def __init__(self, parent, products, refresh_callback, save_callback):
         super().__init__(parent)
         self.title("Product Management")
@@ -589,6 +815,7 @@ class ProductManager(tk.Toplevel):
         self.products = products
         self.refresh_callback = refresh_callback
         self.save_callback = save_callback
+        self.checked_ids = set()  # Track checked product IDs
         self.create_prod_widgets()
 
     def create_prod_widgets(self):
@@ -596,36 +823,56 @@ class ProductManager(tk.Toplevel):
         btn_frame.pack(fill='x')
         ttk.Button(btn_frame, text="Add New Item", command=self.add_product).pack(side='left', padx=5)
         ttk.Button(btn_frame, text="Edit Selected", command=self.edit_product).pack(side='left', padx=5)
-        ttk.Button(btn_frame, text="Delete Selected", command=self.delete_product, style="Danger.TButton").pack(side='left', padx=5)
+        ttk.Button(btn_frame, text="Delete Checked", command=self.delete_checked_products, style="Danger.TButton").pack(side='left', padx=5)
         ttk.Button(btn_frame, text="Import Items", command=self.import_products).pack(side='left', padx=5)
         ttk.Button(btn_frame, text="Save to File", command=self.save, style="Success.TButton").pack(side='right', padx=5)
-
-        # Treeview to display products
-        cols = ('id', 'name', 'category', 'type', 'price', 'stock', 'unit', 'description')
+        # Select All checkbox
+        self.select_all_var = tk.BooleanVar(value=False)
+        select_all_cb = tk.Checkbutton(self, text="Select All", variable=self.select_all_var, command=self.toggle_select_all)
+        select_all_cb.pack(anchor='w', padx=18)
+        # Treeview with checkbox column
+        cols = ('checked', 'id', 'name', 'category', 'type', 'price', 'stock', 'unit', 'description')
         self.prod_tree = ttk.Treeview(self, columns=cols, show='headings')
-        self._sort_orders = {col: False for col in cols}
-        for col, label in zip(cols, ["ID", "Name", "Category", "Type", "Price", "Stock", "Unit", "Description"]):
+        self._sort_orders = {col: False for col in cols if col != 'checked'}
+        self.prod_tree.heading('checked', text='', anchor='center')
+        self.prod_tree.column('checked', width=32, anchor='center')
+        for col, label in zip(cols[1:], ["ID", "Name", "Category", "Type", "Price", "Stock", "Unit", "Description"]):
             self.prod_tree.heading(col, text=label, command=lambda c=col: self.sort_by_column(c))
         self.prod_tree.pack(fill='both', expand=True, padx=10, pady=10)
+        self.prod_tree.bind('<Button-1>', self.on_treeview_click)
         self.refresh_prod_list()
 
-    def sort_by_column(self, col):
-        data = [(self.prod_tree.set(k, col), k) for k in self.prod_tree.get_children('')]
-        # Try to convert to float for numeric columns
-        try:
-            data.sort(key=lambda t: float(t[0]) if t[0] != '' else float('-inf'), reverse=self._sort_orders[col])
-        except ValueError:
-            data.sort(key=lambda t: t[0].lower() if isinstance(t[0], str) else t[0], reverse=self._sort_orders[col])
-        for index, (val, k) in enumerate(data):
-            self.prod_tree.move(k, '', index)
-        self._sort_orders[col] = not self._sort_orders[col]
+    def on_treeview_click(self, event):
+        # Detect if click is on checkbox column
+        region = self.prod_tree.identify('region', event.x, event.y)
+        col = self.prod_tree.identify_column(event.x)
+        if region == 'cell' and col == '#1':
+            row_id = self.prod_tree.identify_row(event.y)
+            if row_id:
+                prod_id = self.prod_tree.set(row_id, 'id')
+                if prod_id in self.checked_ids:
+                    self.checked_ids.remove(prod_id)
+                else:
+                    self.checked_ids.add(prod_id)
+                self.refresh_prod_list()
+        # Allow normal selection for other columns
+
+    def toggle_select_all(self):
+        if self.select_all_var.get():
+            self.checked_ids = set(p.get('id', '') for p in self.products)
+        else:
+            self.checked_ids.clear()
+        self.refresh_prod_list()
 
     def refresh_prod_list(self):
         for i in self.prod_tree.get_children():
             self.prod_tree.delete(i)
         for p in self.products:
-            self.prod_tree.insert('', 'end', values=(
-                p.get('id', ''),
+            prod_id = p.get('id', '')
+            checked = '☑' if prod_id in self.checked_ids else '☐'
+            values = (
+                checked,
+                prod_id,
                 p.get('name', ''),
                 p.get('category', ''),
                 p.get('type', 'product'),
@@ -633,7 +880,22 @@ class ProductManager(tk.Toplevel):
                 p.get('stock', 0) if p.get('type', 'product') == 'product' else '',
                 p.get('unit', '') if p.get('type', 'product') == 'product' else '',
                 p.get('description', '')
-            ))
+            )
+            item_id = self.prod_tree.insert('', 'end', values=values)
+            # Highlight low stock rows
+            if p.get('type', 'product') == 'product' and p.get('stock', 0) <= 5:
+                self.prod_tree.item(item_id, tags=('low_stock',))
+        self.prod_tree.tag_configure('low_stock', background='#ffe5e5')  # Light red
+
+    def delete_checked_products(self):
+        if not self.checked_ids:
+            messagebox.showwarning("No Selection", "Please check at least one item to delete.")
+            return
+        if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete {len(self.checked_ids)} checked item(s)?"):
+            self.products[:] = [p for p in self.products if p.get('id', '') not in self.checked_ids]
+            self.checked_ids.clear()
+            self.select_all_var.set(False)
+            self.refresh_prod_list()
 
     def add_product(self):
         EditProductDialog(self, None, self.add_product_callback, categories=CATEGORIES)
@@ -650,14 +912,14 @@ class ProductManager(tk.Toplevel):
         item_id = selected[0]
         values = self.prod_tree.item(item_id, 'values')
         product = {
-            'id': values[0],
-            'name': values[1],
-            'category': values[2],
-            'type': values[3],
-            'price': float(values[4]),
-            'stock': int(values[5]) if values[5] else 0,
-            'unit': values[6],
-            'description': values[7]
+            'id': values[1],
+            'name': values[2],
+            'category': values[3],
+            'type': values[4],
+            'price': float(values[5]),
+            'stock': int(values[6]) if values[6] else 0,
+            'unit': values[7],
+            'description': values[8]
         }
         EditProductDialog(self, product, self.update_product, categories=CATEGORIES)
 
@@ -667,17 +929,6 @@ class ProductManager(tk.Toplevel):
                 self.products[i] = new_data
                 break
         self.refresh_prod_list()
-
-    def delete_product(self):
-        selected = self.prod_tree.selection()
-        if not selected:
-            messagebox.showwarning("No Selection", "Please select an item to delete.")
-            return
-        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete the selected item(s)?"):
-            for item_id in selected:
-                values = self.prod_tree.item(item_id, 'values')
-                self.products = [p for p in self.products if p['id'] != values[0]]
-            self.refresh_prod_list()
 
     def save(self):
         if self.save_callback():

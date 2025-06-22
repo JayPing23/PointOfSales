@@ -1,0 +1,25 @@
+GROC-0001|Apple|Fruits|product|0.5|120|pcs|Fresh red apples
+GROC-0002|Banana|Fruits|product|0.3|100|pcs|Organic bananas
+GROC-0003|Orange|Fruits|product|0.6|80|pcs|Juicy oranges
+GROC-0004|Broccoli|Vegetables|product|1.2|60|pcs|Fresh broccoli heads
+GROC-0005|Carrot|Vegetables|product|0.4|90|pcs|Crunchy carrots
+GROC-0006|Potato|Vegetables|product|0.25|200|pcs|Brown potatoes
+GROC-0007|Tomato|Vegetables|product|0.55|150|pcs|Vine-ripened tomatoes
+GROC-0008|Onion|Vegetables|product|0.35|180|pcs|Yellow onions
+GROC-0009|Spinach|Vegetables|product|1.1|50|pcs|Fresh spinach leaves
+GROC-0010|Milk|Dairy|product|1.5|60|L|Whole milk 1L
+GROC-0011|Cheddar Cheese|Dairy|product|2.5|40|kg|Aged cheddar cheese
+GROC-0012|Eggs|Dairy|product|2.0|90|dozen|Free-range eggs
+GROC-0013|Chicken Breast|Meat|product|3.5|70|kg|Boneless chicken breast
+GROC-0014|Beef Steak|Meat|product|7.0|30|kg|Premium beef steak
+GROC-0015|Pork Chops|Meat|product|4.0|40|kg|Fresh pork chops
+GROC-0016|Salmon Fillet|Seafood|product|8.0|25|kg|Atlantic salmon fillet
+GROC-0017|Shrimp|Seafood|product|6.5|35|kg|Large shrimp, peeled
+GROC-0018|Rice|Grains|product|1.2|100|kg|Long grain white rice
+GROC-0019|Pasta|Grains|product|1.0|80|kg|Italian spaghetti pasta
+GROC-0020|Bread|Bakery|product|1.8|60|pcs|Whole wheat bread loaf
+GROC-0021|Butter|Dairy|product|2.2|50|kg|Creamy unsalted butter
+GROC-0022|Yogurt|Dairy|product|1.0|70|pcs|Plain yogurt cup
+GROC-0023|Sugar|Baking|product|0.9|90|kg|Granulated white sugar
+GROC-0024|Salt|Baking|product|0.5|110|kg|Iodized table salt
+GROC-0025|Cooking Oil|Pantry|product|2.0|80|L|Sunflower cooking oil
