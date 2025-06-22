@@ -15,12 +15,69 @@ Features:
 - File Handling: Load and save the product database to different files.
 """
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, colorchooser
 import datetime
 import uuid
 import os
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import json
+
+# --- Unified Category List ---
+CATEGORIES = [
+    # This is a flat list of all possible categories for legacy compatibility and dropdowns
+    "Electronics", "Raw Materials", "Finished Goods", "Food & Beverage", "Clothing", "Equipment", "Supplies", "Bakery", "Cafe", "Grocery", "Household", "Stationery", "Beverages", "Snacks", "Personal Care", "Services", "Digital Products", "Subscription", "Booking", "Consulting", "Training", "IT", "Logistics", "General Store", "Other"
+]
+
+# --- Two-Level Category Tree ---
+CATEGORY_TREE = {
+    # Main categories as keys, each with a list of subcategories
+    "Raw Materials": ["Metals", "Plastics", "Chemicals", "Other"],
+    "Components": ["Electronics", "Mechanical", "Optical", "Other"],
+    "Finished Goods": ["Electronics", "Furniture", "Apparel", "Other"],
+    "Consumables": ["Food", "Beverage", "Office Supplies", "Other"],
+    "Perishables": ["Produce", "Dairy", "Meat", "Other"],
+    "Equipment": ["IT", "Manufacturing", "Office", "Other"],
+    "Supplies": ["Cleaning", "Packaging", "Safety", "Other"],
+    "Packaging": ["Boxes", "Bottles", "Wrapping", "Other"],
+    "Service": ["Repair", "Installation", "Delivery", "Consulting", "Other"],
+    "Digital": ["Software", "eBook", "Media", "License", "Other"],
+    "Subscription": ["SaaS", "Maintenance", "Membership", "Other"],
+    "Booking": ["Event", "Rental", "Appointment", "Other"],
+    "Training": ["Staff", "Customer", "Other"],
+    "Maintenance": ["Equipment", "IT", "Other"],
+    "Other": ["Other"]
+}
+
+# On startup, load custom categories and merge with CATEGORY_TREE
+# This allows users to extend the category system without losing defaults
+
+def load_custom_categories():
+    # Loads user-defined categories from a JSON file if it exists
+    if os.path.exists(CUSTOM_CATEGORIES_FILE):
+        with open(CUSTOM_CATEGORIES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+def save_custom_categories(custom_tree):
+    # Saves the current custom category tree to disk
+    with open(CUSTOM_CATEGORIES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(custom_tree, f, indent=2)
+
+# Merge default and custom trees
+def get_full_category_tree():
+    # Start with a copy of the default tree
+    tree = {k: v[:] for k, v in CATEGORY_TREE.items()}
+    custom = load_custom_categories()
+    for main, subs in custom.items():
+        if main not in tree:
+            tree[main] = []
+        for sub in subs:
+            if sub not in tree[main]:
+                tree[main].append(sub)
+    return tree
+
+CATEGORY_TREE = get_full_category_tree()
 
 # --- CONFIGURATION & STYLING ---
 # Centralized configuration for easy customization
@@ -353,7 +410,7 @@ class POSApp:
                     for product in self.products:
                         # Save all fields pipe-delimited
                         line = f"{product['id']}|{product['name']}|{product.get('category','')}|{product.get('type','product')}|{product.get('price',0.0)}|{product.get('stock',0)}|{product.get('unit','pcs')}|{product.get('description','')}\n"
-                        f.write(line)
+                    f.write(line)
             CONFIG['products_file'] = path
             return True
         except Exception as e:
@@ -546,10 +603,22 @@ class ProductManager(tk.Toplevel):
         # Treeview to display products
         cols = ('id', 'name', 'category', 'type', 'price', 'stock', 'unit', 'description')
         self.prod_tree = ttk.Treeview(self, columns=cols, show='headings')
+        self._sort_orders = {col: False for col in cols}
         for col, label in zip(cols, ["ID", "Name", "Category", "Type", "Price", "Stock", "Unit", "Description"]):
-            self.prod_tree.heading(col, text=label)
+            self.prod_tree.heading(col, text=label, command=lambda c=col: self.sort_by_column(c))
         self.prod_tree.pack(fill='both', expand=True, padx=10, pady=10)
         self.refresh_prod_list()
+
+    def sort_by_column(self, col):
+        data = [(self.prod_tree.set(k, col), k) for k in self.prod_tree.get_children('')]
+        # Try to convert to float for numeric columns
+        try:
+            data.sort(key=lambda t: float(t[0]) if t[0] != '' else float('-inf'), reverse=self._sort_orders[col])
+        except ValueError:
+            data.sort(key=lambda t: t[0].lower() if isinstance(t[0], str) else t[0], reverse=self._sort_orders[col])
+        for index, (val, k) in enumerate(data):
+            self.prod_tree.move(k, '', index)
+        self._sort_orders[col] = not self._sort_orders[col]
 
     def refresh_prod_list(self):
         for i in self.prod_tree.get_children():
@@ -567,7 +636,7 @@ class ProductManager(tk.Toplevel):
             ))
 
     def add_product(self):
-        EditProductDialog(self, None, self.add_product_callback)
+        EditProductDialog(self, None, self.add_product_callback, categories=CATEGORIES)
 
     def add_product_callback(self, _, new_data):
         self.products.append(new_data)
@@ -580,7 +649,6 @@ class ProductManager(tk.Toplevel):
             return
         item_id = selected[0]
         values = self.prod_tree.item(item_id, 'values')
-        # Map values to dict
         product = {
             'id': values[0],
             'name': values[1],
@@ -591,7 +659,7 @@ class ProductManager(tk.Toplevel):
             'unit': values[6],
             'description': values[7]
         }
-        EditProductDialog(self, product, self.update_product)
+        EditProductDialog(self, product, self.update_product, categories=CATEGORIES)
 
     def update_product(self, old_id, new_data):
         for i, p in enumerate(self.products):
@@ -669,7 +737,7 @@ class ProductManager(tk.Toplevel):
             messagebox.showerror("Import Error", f"Failed to import items: {e}")
 
 class EditProductDialog(tk.Toplevel):
-    def __init__(self, parent, product, callback):
+    def __init__(self, parent, product, callback, categories=None):
         super().__init__(parent)
         self.title("Edit Item" if product else "Add New Item")
         self.geometry("500x600")
@@ -677,10 +745,12 @@ class EditProductDialog(tk.Toplevel):
         self.grab_set()
         self.callback = callback
         self.old_id = product['id'] if product else None
+        self.categories = categories if categories else []
         # Fields
         self.id_var = tk.StringVar(value=product['id'] if product else f"prod_{uuid.uuid4().hex[:8]}")
         self.name_var = tk.StringVar(value=product['name'] if product else "")
-        self.category_var = tk.StringVar(value=product['category'] if product else "")
+        self.main_category_var = tk.StringVar(value=product['category'] if product else "")
+        self.sub_category_var = tk.StringVar(value=product['subcategory'] if product else "")
         self.type_var = tk.StringVar(value=product['type'] if product else "product")
         self.price_var = tk.StringVar(value=str(product['price']) if product else "0.0")
         self.stock_var = tk.StringVar(value=str(product['stock']) if product and product['type'] == 'product' else "0")
@@ -694,8 +764,13 @@ class EditProductDialog(tk.Toplevel):
         tk.Label(self, text="Name:").grid(row=row, column=0, sticky='e', padx=10, pady=8)
         tk.Entry(self, textvariable=self.name_var).grid(row=row, column=1, sticky='w', padx=10, pady=8)
         row += 1
-        tk.Label(self, text="Category:").grid(row=row, column=0, sticky='e', padx=10, pady=8)
-        tk.Entry(self, textvariable=self.category_var).grid(row=row, column=1, sticky='w', padx=10, pady=8)
+        tk.Label(self, text="Main Category:").grid(row=row, column=0, sticky='e', padx=10, pady=8)
+        self.main_category_combo = ttk.Combobox(self, textvariable=self.main_category_var, values=self.categories, state='normal')
+        self.main_category_combo.grid(row=row, column=1, sticky='w', padx=10, pady=8)
+        row += 1
+        tk.Label(self, text="Sub Category:").grid(row=row, column=0, sticky='e', padx=10, pady=8)
+        self.sub_category_combo = ttk.Combobox(self, textvariable=self.sub_category_var, values=CATEGORY_TREE.get(self.main_category_var.get(), []), state="readonly")
+        self.sub_category_combo.grid(row=row, column=1, sticky='w', padx=10, pady=8)
         row += 1
         tk.Label(self, text="Type:").grid(row=row, column=0, sticky='e', padx=10, pady=8)
         type_combo = ttk.Combobox(self, textvariable=self.type_var, values=["product", "service", "subscription", "booking", "digital"], state="readonly")
@@ -737,13 +812,18 @@ class EditProductDialog(tk.Toplevel):
         new_data = {
             'id': self.id_var.get(),
             'name': self.name_var.get(),
-            'category': self.category_var.get(),
+            'category': self.main_category_var.get(),
+            'subcategory': self.sub_category_var.get(),
             'type': t,
             'price': float(self.price_var.get()),
             'stock': int(self.stock_var.get()) if t == 'product' else 0,
             'unit': self.unit_var.get() if t == 'product' else '',
             'description': self.description_var.get()
         }
+        # Add new category to the session list if not present
+        if new_data['category'] and new_data['category'] not in self.categories:
+            self.categories.append(new_data['category'])
+            self.main_category_combo['values'] = self.categories
         self.callback(self.old_id, new_data)
         self.destroy()
 
@@ -828,6 +908,49 @@ class ReceiptWindow(tk.Toplevel):
         receipt_text.insert('1.0', receipt)
         receipt_text.config(state='disabled') # Make it read-only
 
+class CategoryManagerDialog(tk.Toplevel):
+    def __init__(self, parent, category_tree, on_save):
+        super().__init__(parent)
+        self.title('Manage Categories')
+        self.geometry('500x400')
+        self.category_tree = category_tree
+        self.on_save = on_save
+        self.tree = ttk.Treeview(self, columns=('Color', 'Icon'))
+        self.tree.heading('#0', text='Main Category')
+        self.tree.heading('Color', text='Color')
+        self.tree.heading('Icon', text='Icon')
+        self.tree.pack(fill='both', expand=True, padx=10, pady=10)
+        self.populate_tree()
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill='x', pady=5)
+        ttk.Button(btn_frame, text='Add Main', command=self.add_main).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text='Add Sub', command=self.add_sub).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text='Rename', command=self.rename_cat).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text='Delete', command=self.delete_cat).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text='Set Color', command=self.set_color).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text='Set Icon', command=self.set_icon).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text='Save', command=self.save).pack(side='right', padx=5)
+    def populate_tree(self):
+        self.tree.delete(*self.tree.get_children())
+        for main, subs in self.category_tree.items():
+            main_id = self.tree.insert('', 'end', text=main, values=(self.get_color(main), self.get_icon(main)))
+            for sub in subs:
+                self.tree.insert(main_id, 'end', text=sub, values=(self.get_color(main, sub), self.get_icon(main, sub)))
+    def get_color(self, main, sub=None):
+        # Placeholder: return color from category data
+        return ''
+    def get_icon(self, main, sub=None):
+        # Placeholder: return icon from category data
+        return ''
+    def add_main(self): pass
+    def add_sub(self): pass
+    def rename_cat(self): pass
+    def delete_cat(self): pass
+    def set_color(self): pass
+    def set_icon(self): pass
+    def save(self):
+        self.on_save(self.category_tree)
+        self.destroy()
 
 # --- RUN APPLICATION ---
 if __name__ == "__main__":

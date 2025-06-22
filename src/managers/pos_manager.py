@@ -101,4 +101,65 @@ class POSManager:
             return True
         except Exception as e:
             print(f"Error loading products from JSON: {e}")
+            return False
+
+    def load_products_from_txt(self, filepath: str) -> bool:
+        try:
+            if not os.path.exists(filepath):
+                return False
+            with open(filepath, 'r', encoding='utf-8') as f:
+                self.products = []
+                for line in f:
+                    parts = line.strip().split('|')
+                    if len(parts) >= 8:
+                        self.products.append(Product(
+                            product_id=parts[0],
+                            name=parts[1],
+                            category=parts[2],
+                            type=parts[3],
+                            price=float(parts[4]),
+                            stock=int(parts[5]),
+                            unit=parts[6],
+                            description=parts[7]
+                        ))
+            return True
+        except Exception as e:
+            print(f"Error loading products from TXT: {e}")
+            return False
+
+    def load_products_from_csv(self, filepath: str) -> bool:
+        try:
+            import csv
+            if not os.path.exists(filepath):
+                return False
+            with open(filepath, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                self.products = []
+                for row in reader:
+                    self.products.append(Product(
+                        product_id=row.get('product_id', ''),
+                        name=row.get('name', ''),
+                        category=row.get('category', ''),
+                        type=row.get('type', 'product'),
+                        price=float(row.get('price', 0.0)),
+                        stock=int(row.get('stock', 0)),
+                        unit=row.get('unit', 'pcs'),
+                        description=row.get('description', '')
+                    ))
+            return True
+        except Exception as e:
+            print(f"Error loading products from CSV: {e}")
+            return False
+
+    def load_products_from_yaml(self, filepath: str) -> bool:
+        try:
+            import yaml
+            if not os.path.exists(filepath):
+                return False
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+                self.products = [Product.from_dict(item) for item in data]
+            return True
+        except Exception as e:
+            print(f"Error loading products from YAML: {e}")
             return False 
