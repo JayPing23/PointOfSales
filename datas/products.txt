@@ -1,11 +1,79 @@
-prod_1001|Cafe Latte|4.5|100
-prod_1002|Cappuccino|4.75|100
-prod_1003|Espresso|3.0|148
-prod_1004|Americano|3.5|100
-prod_1005|Mocha|5.0|80
-prod_1006|Iced Coffee|4.0|99
-item_2001|Croissant|2.75|48
-item_2002|Muffin|3.25|60
-item_2003|Brownie|3.5|40
-item_2004|Sandwich|7.5|28
-prod_a6f6|New Product|0.0|0
+PRD-RETAIL-001|Apple|Grocery|product|0.50|120|pcs|Fresh red apples
+PRD-RETAIL-002|Banana|Grocery|product|0.30|100|pcs|Organic bananas
+PRD-RETAIL-003|LED TV|Electronics|product|250.00|20|pcs|42-inch LED television
+PRD-RETAIL-004|Smartphone|Electronics|product|400.00|30|pcs|Android smartphone 128GB
+PRD-RETAIL-005|Jeans|Clothing|product|25.00|50|pair|Blue denim jeans
+PRD-RETAIL-006|T-shirt|Clothing|product|10.00|80|pcs|Cotton t-shirt
+PRD-RETAIL-007|Notebook|Stationery|product|1.50|60|pcs|A5 ruled notebook
+PRD-RETAIL-008|Ballpoint Pen|Stationery|product|0.50|120|pcs|Blue ballpoint pen
+PRD-RETAIL-009|Umbrella|General Store|product|5.00|30|pcs|Compact folding umbrella
+PRD-RETAIL-010|Gift Wrap|General Store|product|1.00|40|sheet|Colorful gift wrap sheet
+PRD-RETAIL-011|Socks|Clothing|product|2.50|70|pair|Cotton ankle socks
+PRD-RETAIL-012|Headphones|Electronics|product|25.00|40|pcs|Over-ear headphones
+PRD-RETAIL-013|Rice|Grocery|product|1.20|100|kg|Long grain white rice
+PRD-RETAIL-014|Canned Tuna|Grocery|product|1.20|80|can|Canned tuna in oil
+PRD-RETAIL-015|Printer Paper|Stationery|product|3.00|50|ream|A4 printer paper 500 sheets
+
+PRD-FOOD-001|Cafe Latte|Cafe|product|2.50|30|cup|Espresso with steamed milk
+PRD-FOOD-002|Croissant|Cafe|product|2.00|20|pcs|Buttery croissant
+PRD-FOOD-003|Eggs Benedict|Restaurant|product|6.00|15|plate|Classic eggs benedict
+PRD-FOOD-004|Cheeseburger|Restaurant|product|5.50|25|pcs|Beef cheeseburger
+PRD-FOOD-005|Pizza Margherita|Restaurant|product|8.00|18|pcs|Classic margherita pizza
+PRD-FOOD-006|Chicken Caesar Salad|Restaurant|product|7.00|20|bowl|Grilled chicken caesar salad
+PRD-FOOD-007|Bottled Water|Beverages|product|0.50|120|bottle|Mineral bottled water 500ml
+PRD-FOOD-008|Orange Juice|Beverages|product|2.20|50|L|Fresh orange juice 1L
+PRD-FOOD-009|Catering Service|Catering|service|200.00|0|event|Full-service event catering
+PRD-FOOD-010|Table Reservation|Restaurant|booking|10.00|0|booking|Reserve a table for up to 6 guests
+PRD-FOOD-011|Meal Subscription|Restaurant|subscription|50.00|0|month|Monthly meal plan subscription
+PRD-FOOD-012|Barista Training|Cafe|service|100.00|0|session|Professional barista training session
+PRD-FOOD-013|Birthday Cake Order|Bakery|booking|30.00|0|cake|Custom birthday cake order
+PRD-FOOD-014|Online Menu Access|Restaurant|digital|5.00|0|access|Access to digital menu and ordering
+PRD-FOOD-015|Cooking Class|Restaurant|service|60.00|0|class|Group cooking class
+
+PRD-SERVICE-001|Phone Repair|Repairs|service|40.00|0|service|Smartphone screen replacement
+PRD-SERVICE-002|Laptop Tune-Up|Repairs|service|60.00|0|service|Laptop cleaning and optimization
+PRD-SERVICE-003|Spa Massage|Spa|service|50.00|0|session|Full body massage (per session)
+PRD-SERVICE-004|Facial Treatment|Spa|service|35.00|0|session|Deep cleansing facial
+PRD-SERVICE-005|Business Consulting|Consulting|service|100.00|0|hour|Business strategy consulting (per hour)
+PRD-SERVICE-006|Room Cleaning|Cleaning|service|25.00|0|service|Professional room cleaning service
+PRD-SERVICE-007|Laundry Service|Cleaning|service|12.00|0|load|Wash and fold laundry service
+PRD-SERVICE-008|Car Rental|Transport|booking|60.00|0|day|Car rental per day
+PRD-SERVICE-009|Event Ticket|Events|booking|20.00|0|ticket|Concert or event ticket
+PRD-SERVICE-010|WiFi Subscription|IT|subscription|5.00|0|month|Monthly WiFi access
+PRD-SERVICE-011|Digital Magazine|Media|digital|3.00|0|download|Monthly digital magazine
+PRD-SERVICE-012|E-Book|Media|digital|8.00|0|download|Downloadable e-book
+PRD-SERVICE-013|Software License|IT|digital|99.00|0|license|Annual software license
+PRD-SERVICE-014|Online Course|Education|digital|49.00|0|course|Access to online course
+PRD-SERVICE-015|Pet Grooming|Pet Care|service|35.00|0|session|Full pet grooming session
+
+PRD-MIXED-001|Shoe Sale|Clothing|product|30.00|40|pair|Running shoes
+PRD-MIXED-002|Shoe Cleaning|Clothing|service|8.00|0|pair|Professional shoe cleaning
+PRD-MIXED-003|Tailoring|Clothing|service|15.00|0|item|Custom tailoring service
+PRD-MIXED-004|Watch Battery|Electronics|product|5.00|25|pcs|Watch battery replacement
+PRD-MIXED-005|Watch Repair|Electronics|service|20.00|0|service|Watch repair service
+PRD-MIXED-006|Gift Wrapping|General Store|service|2.00|0|item|Gift wrapping service
+PRD-MIXED-007|Coffee Beans|Cafe|product|12.00|30|kg|Premium coffee beans
+PRD-MIXED-008|Coffee Brewing Workshop|Cafe|service|30.00|0|class|Coffee brewing workshop
+PRD-MIXED-009|Custom T-shirt Print|Clothing|service|18.00|0|pcs|Custom t-shirt printing
+PRD-MIXED-010|Bag Repair|General Store|service|10.00|0|item|Bag zipper or handle repair
+PRD-MIXED-011|Mobile Data Top-up|IT|digital|10.00|0|voucher|Mobile data voucher
+PRD-MIXED-012|Event Space Rental|Events|booking|100.00|0|hour|Rent event space by the hour
+PRD-MIXED-013|Photo Printing|Media|service|0.50|0|photo|Photo printing service
+PRD-MIXED-014|Digital Photo Album|Media|digital|15.00|0|album|Downloadable digital photo album
+PRD-MIXED-015|VIP Club Membership|General Store|subscription|25.00|0|year|Annual VIP club membership
+
+PRD-MFG-001|Steel Rod|Raw Materials|product|20.00|100|pcs|Industrial steel rod
+PRD-MFG-002|Copper Wire|Raw Materials|product|15.00|200|m|High-conductivity copper wire
+PRD-MFG-003|Plastic Pellets|Raw Materials|product|2.00|500|kg|Plastic pellets for molding
+PRD-MFG-004|Wood Plank|Raw Materials|product|8.00|150|pcs|Treated wood plank
+PRD-MFG-005|Paint (Blue)|Raw Materials|product|12.00|60|L|Blue industrial paint
+PRD-MFG-006|Finished Table|Finished Goods|product|80.00|30|pcs|Dining table (finished good)
+PRD-MFG-007|Office Chair|Finished Goods|product|45.00|40|pcs|Ergonomic office chair
+PRD-MFG-008|Logistics Service|Logistics|service|150.00|0|shipment|Freight and delivery service
+PRD-MFG-009|Bulk Packaging|Logistics|service|50.00|0|order|Bulk packaging service
+PRD-MFG-010|Supply Chain Consulting|Consulting|service|200.00|0|hour|Supply chain optimization consulting
+PRD-MFG-011|Warehouse Rental|Logistics|booking|500.00|0|month|Warehouse space rental (per month)
+PRD-MFG-012|Inventory Management Software|IT|digital|299.00|0|license|Inventory management software license
+PRD-MFG-013|Maintenance Contract|Services|subscription|1000.00|0|year|Annual equipment maintenance contract
+PRD-MFG-014|Safety Training|Services|service|120.00|0|session|Workplace safety training session
+PRD-MFG-015|Production Report|IT|digital|25.00|0|report|Downloadable production report

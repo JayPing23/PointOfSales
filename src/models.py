@@ -1,14 +1,24 @@
 class Product:
     """
-    Represents a product in the POS system.
+    Represents an item in the POS system. Can be a tangible product or a non-tangible item (service, subscription, booking, digital).
+    :param product_id: Unique product ID
+    :param name: Name of the item
+    :param category: Category
+    :param price: Price
+    :param stock: Stock (for tangible products)
+    :param description: Description
+    :param type: 'product', 'service', 'subscription', 'booking', 'digital'
+    :param unit: Unit of measure (for tangible products)
     """
-    def __init__(self, product_id: str, name: str, category: str, price: float, stock: int, description: str = ""):
+    def __init__(self, product_id: str, name: str, category: str, price: float, stock: int = 0, description: str = "", type: str = "product", unit: str = "pcs"):
         self.product_id = product_id
         self.name = name
         self.category = category
         self.price = price
         self.stock = stock
         self.description = description
+        self.type = type  # 'product', 'service', 'subscription', 'booking', 'digital'
+        self.unit = unit
 
     def to_dict(self) -> dict:
         return {
@@ -17,7 +27,9 @@ class Product:
             "category": self.category,
             "price": self.price,
             "stock": self.stock,
-            "description": self.description
+            "description": self.description,
+            "type": self.type,
+            "unit": self.unit
         }
 
     @staticmethod
@@ -28,7 +40,9 @@ class Product:
             category=data.get("category", ""),
             price=float(data.get("price", 0.0)),
             stock=int(data.get("stock", 0)),
-            description=data.get("description", "")
+            description=data.get("description", ""),
+            type=data.get("type", "product"),
+            unit=data.get("unit", "pcs")
         )
 
 class CartItem:

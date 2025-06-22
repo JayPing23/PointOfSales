@@ -1,0 +1,30 @@
+MFG-0001|Steel Rod|Raw Materials|product|20.00|100|pcs|Industrial steel rod
+MFG-0002|Copper Wire|Raw Materials|product|15.00|200|m|High-conductivity copper wire
+MFG-0003|Plastic Pellets|Raw Materials|product|2.00|500|kg|Plastic pellets for molding
+MFG-0004|Wood Plank|Raw Materials|product|8.00|150|pcs|Treated wood plank
+MFG-0005|Paint (Blue)|Raw Materials|product|12.00|60|L|Blue industrial paint
+MFG-0006|Finished Table|Finished Goods|product|80.00|30|pcs|Dining table (finished good)
+MFG-0007|Office Chair|Finished Goods|product|45.00|40|pcs|Ergonomic office chair
+MFG-0008|Screws|Raw Materials|product|0.05|1000|pcs|Steel screws for assembly
+MFG-0009|Packing Tape|Logistics|product|2.00|100|roll|Heavy-duty packing tape
+MFG-0010|Shipping Box|Logistics|product|3.00|80|box|Cardboard shipping box
+MFG-0011|Safety Gloves|Supplies|product|4.00|60|pair|Industrial safety gloves
+MFG-0012|Pallet|Logistics|product|15.00|50|pcs|Wooden pallet for transport
+MFG-0013|Bubble Wrap|Supplies|product|10.00|30|roll|Protective bubble wrap
+MFG-0014|Label Printer|Equipment|product|120.00|10|pcs|Thermal label printer
+MFG-0015|Barcode Scanner|Equipment|product|60.00|15|pcs|Handheld barcode scanner
+MFG-0016|Logistics Service|Logistics|service|150.00|0|shipment|Freight and delivery service
+MFG-0017|Bulk Packaging|Logistics|service|50.00|0|order|Bulk packaging service
+MFG-0018|Supply Chain Consulting|Consulting|service|200.00|0|hour|Supply chain optimization consulting
+MFG-0019|Warehouse Rental|Logistics|booking|500.00|0|month|Warehouse space rental (per month)
+MFG-0020|Inventory Management Software|IT|digital|299.00|0|license|Inventory management software license
+MFG-0021|Maintenance Contract|Services|subscription|1000.00|0|year|Annual equipment maintenance contract
+MFG-0022|Safety Training|Services|service|120.00|0|session|Workplace safety training session
+MFG-0023|Production Report|IT|digital|25.00|0|report|Downloadable production report
+MFG-0024|Forklift|Equipment|product|9000.00|5|pcs|Industrial forklift
+MFG-0025|Conveyor Belt|Equipment|product|3500.00|3|pcs|Automated conveyor belt
+MFG-0026|Shrink Wrap Machine|Equipment|product|2500.00|2|pcs|Shrink wrap packaging machine
+MFG-0027|Industrial Fan|Equipment|product|400.00|8|pcs|Heavy-duty industrial fan
+MFG-0028|Work Table|Equipment|product|150.00|12|pcs|Steel work table
+MFG-0029|Safety Vest|Supplies|product|8.00|40|pcs|Reflective safety vest
+MFG-0030|First Aid Kit|Supplies|product|25.00|20|kit|Workplace first aid kit 

@@ -95,6 +95,10 @@ class POSApp:
         self.summary_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.summary_frame, text="Sales Summary")
         self.create_sales_summary(self.summary_frame)
+        # IMS Sync Tab
+        self.sync_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.sync_frame, text="IMS Sync")
+        self.create_sync_tab(self.sync_frame)
 
     def create_widgets(self, parent):
         """Create the main layout and widgets of the application."""
@@ -210,22 +214,126 @@ class POSApp:
         else:
             ttk.Label(parent, text="No sales data available.").pack(pady=20)
 
+    def create_sync_tab(self, parent):
+        """Create IMS sync tab for import/export tangible items."""
+        frame = ttk.Frame(parent, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(frame, text="IMS ↔ POS Sync", font=('Segoe UI', 14, 'bold')).pack(pady=10)
+        ttk.Button(frame, text="Import Tangible Items from IMS", command=self.import_from_ims).pack(pady=10)
+        ttk.Button(frame, text="Export Tangible Items to IMS", command=self.export_to_ims).pack(pady=10)
+        self.sync_status = tk.StringVar(value="Ready.")
+        ttk.Label(frame, textvariable=self.sync_status, font=('Segoe UI', 10)).pack(pady=10)
+
+    def import_from_ims(self):
+        """Import tangible items (type == 'product') from IMS JSON or TXT file."""
+        file_path = filedialog.askopenfilename(title="Import from IMS", filetypes=[("JSON Files", "*.json"), ("Text Files", "*.txt"), ("All Files", "*.*")])
+        if not file_path:
+            return
+        try:
+            imported = 0
+            if file_path.endswith('.json'):
+                import json
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        for item in data:
+                            if item.get('type', 'product') == 'product':
+                                prod_id = item.get('id') or item.get('product_id') or f"prod_{uuid.uuid4().hex[:8]}"
+                                name = item.get('name', 'Unknown')
+                                category = item.get('category', '')
+                                price = float(item.get('price', 0.0))
+                                stock = int(item.get('stock', 0))
+                                unit = item.get('unit', 'pcs')
+                                description = item.get('description', '')
+                                if not any(p['id'] == prod_id for p in self.products):
+                                    self.products.append({'id': prod_id, 'name': name, 'category': category, 'type': 'product', 'price': price, 'stock': stock, 'unit': unit, 'description': description})
+                                    imported += 1
+            else:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if not line.strip(): continue
+                        parts = line.strip().split('|')
+                        if len(parts) >= 8 and parts[3] == 'product':
+                            prod_id, name, category, type_, price, stock, unit, description = parts[:8]
+                            if not any(p['id'] == prod_id for p in self.products):
+                                self.products.append({'id': prod_id, 'name': name, 'category': category, 'type': 'product', 'price': float(price), 'stock': int(stock), 'unit': unit, 'description': description})
+                                imported += 1
+            self.save_products()
+            self.refresh_main_window()
+            self.sync_status.set(f"Imported {imported} tangible items from IMS.")
+        except Exception as e:
+            self.sync_status.set(f"Import failed: {e}")
+
+    def export_to_ims(self):
+        """Export current tangible items (type == 'product') to IMS as JSON or TXT."""
+        file_path = filedialog.asksaveasfilename(title="Export to IMS", filetypes=[("JSON Files", "*.json"), ("Text Files", "*.txt"), ("All Files", "*.*")], defaultextension=".json")
+        if not file_path:
+            return
+        try:
+            tangible = [p for p in self.products if p.get('type', 'product') == 'product']
+            if file_path.endswith('.json'):
+                import json
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(tangible, f, indent=4)
+            else:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    for p in tangible:
+                        line = f"{p['id']}|{p['name']}|{p.get('category','')}|product|{p.get('price',0.0)}|{p.get('stock',0)}|{p.get('unit','pcs')}|{p.get('description','')}\n"
+                        f.write(line)
+            self.sync_status.set(f"Exported {len(tangible)} tangible items to IMS.")
+        except Exception as e:
+            self.sync_status.set(f"Export failed: {e}")
+
     # --- DATA HANDLING ---
     def load_data(self, filepath=None):
-        """Load products from a pipe-delimited TXT file."""
+        """Load products from a pipe-delimited TXT file or JSON file."""
         self.products.clear()
         try:
             path = filepath or CONFIG['products_file']
-            with open(path, 'r') as f:
-                for line in f:
-                    if not line.strip(): continue
-                    parts = line.strip().split('|')
-                    self.products.append({
-                        "id": parts[0],
-                        "name": parts[1],
-                        "price": float(parts[2]),
-                        "stock": int(parts[3])
-                    })
+            if path.endswith('.json'):
+                import json
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    for item in data:
+                        self.products.append({
+                            'id': item.get('id') or item.get('product_id'),
+                            'name': item.get('name', ''),
+                            'category': item.get('category', ''),
+                            'type': item.get('type', 'product'),
+                            'price': float(item.get('price', 0.0)),
+                            'stock': int(item.get('stock', 0)),
+                            'unit': item.get('unit', 'pcs'),
+                            'description': item.get('description', '')
+                        })
+            else:
+                with open(path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if not line.strip(): continue
+                        parts = line.strip().split('|')
+                        # Legacy: id|name|price|stock
+                        if len(parts) == 4:
+                            self.products.append({
+                                'id': parts[0],
+                                'name': parts[1],
+                                'category': '',
+                                'type': 'product',
+                                'price': float(parts[2]),
+                                'stock': int(parts[3]),
+                                'unit': 'pcs',
+                                'description': ''
+                            })
+                        # New: id|name|category|type|price|stock|unit|description
+                        elif len(parts) >= 8:
+                            self.products.append({
+                                'id': parts[0],
+                                'name': parts[1],
+                                'category': parts[2],
+                                'type': parts[3],
+                                'price': float(parts[4]),
+                                'stock': int(parts[5]),
+                                'unit': parts[6],
+                                'description': parts[7]
+                            })
             CONFIG['products_file'] = path # Update current file
         except (FileNotFoundError) as e:
             messagebox.showerror("Error Loading Data", f"Products file not found: {e}\nStarting with an empty product list.")
@@ -236,10 +344,16 @@ class POSApp:
         """Save the current product list to a pipe-delimited TXT file."""
         try:
             path = filepath or CONFIG['products_file']
-            with open(path, 'w') as f:
-                for product in self.products:
-                    line = f"{product['id']}|{product['name']}|{product['price']}|{product['stock']}\n"
-                    f.write(line)
+            if path.endswith('.json'):
+                import json
+                with open(path, 'w', encoding='utf-8') as f:
+                    json.dump(self.products, f, indent=4)
+            else:
+                with open(path, 'w', encoding='utf-8') as f:
+                    for product in self.products:
+                        # Save all fields pipe-delimited
+                        line = f"{product['id']}|{product['name']}|{product.get('category','')}|{product.get('type','product')}|{product.get('price',0.0)}|{product.get('stock',0)}|{product.get('unit','pcs')}|{product.get('description','')}\n"
+                        f.write(line)
             CONFIG['products_file'] = path
             return True
         except Exception as e:
@@ -277,18 +391,22 @@ class POSApp:
     
     # --- CART LOGIC ---
     def add_to_cart(self, product):
-        """Add a product to the cart or increment its quantity."""
+        """Add a product or item to the cart or increment its quantity."""
         # Find product in cart
         for item in self.cart:
             if item['id'] == product['id']:
                 item['quantity'] += 1
                 self.update_cart_display()
                 return
-        
-        # If not in cart, add it
+        # Only check stock for tangible products
+        if product.get('type', 'product') == 'product' and product.get('stock', 0) <= 0:
+            messagebox.showwarning("Out of Stock", f"'{product['name']}' is out of stock.")
+            return
         cart_item = {
             "id": product['id'],
             "name": product['name'],
+            "type": product.get('type', 'product'),
+            "unit": product.get('unit', ''),
             "price": product['price'],
             "quantity": 1
         }
@@ -313,11 +431,14 @@ class POSApp:
         # Clear tree
         for i in self.cart_tree.get_children():
             self.cart_tree.delete(i)
-        
         # Repopulate tree
         for item in self.cart:
-            self.cart_tree.insert('', 'end', iid=item['id'], values=(item['name'], item['quantity'], f"{CONFIG['currency_symbol']}{item['price'] * item['quantity']:.2f}"))
-        
+            display_name = item['name']
+            if item.get('type', 'product') != 'product':
+                display_name += f" ({item['type']})"
+            if item.get('unit') and item.get('type', 'product') == 'product':
+                display_name += f" [{item['unit']}]"
+            self.cart_tree.insert('', 'end', iid=item['id'], values=(display_name, item['quantity'], f"{CONFIG['currency_symbol']}{item['price'] * item['quantity']:.2f}"))
         self.update_totals()
 
     def update_totals(self):
@@ -343,46 +464,42 @@ class POSApp:
         PaymentDialog(self.root, total_amount, self.finalize_sale)
         
     def finalize_sale(self, total, tendered):
-        """Finalize the sale, save data, and show receipt."""
-        # 1. Update stock quantities
+        """Finalize the sale, save data, and show receipt. Also sync IMS stock for tangible items (stub)."""
+        # 1. Update stock quantities (only for tangible products)
         for cart_item in self.cart:
             for product in self.products:
-                if product['id'] == cart_item['id']:
+                if product['id'] == cart_item['id'] and product.get('type', 'product') == 'product':
                     product['stock'] -= cart_item['quantity']
+                    # --- IMS SYNC HOOK: update IMS stock here (API/file integration) ---
+                    # Example: self.sync_ims_stock(product['id'], product['stock'])
                     break
-        
         # 2. Record the sale to sales.txt
         sale_id = str(uuid.uuid4())
         timestamp = datetime.datetime.now().isoformat()
         subtotal = sum(item['price'] * item['quantity'] for item in self.cart)
-        
         try:
             with open(CONFIG['sales_file'], 'a') as f:
                 f.write(f"--- SALE START ---\n")
                 f.write(f"ID: {sale_id}\n")
                 f.write(f"TIMESTAMP: {timestamp}\n")
                 for item in self.cart:
-                    f.write(f"ITEM: {item['id']}|{item['name']}|{item['quantity']}|{item['price']}\n")
+                    f.write(f"ITEM: {item['id']}|{item['name']}|{item['quantity']}|{item['price']}|{item.get('type','product')}|{item.get('unit','')}\n")
                 f.write(f"SUBTOTAL: {subtotal:.2f}\n")
                 f.write(f"TOTAL: {total:.2f}\n")
                 f.write(f"TENDERED: {tendered:.2f}\n")
                 f.write(f"--- SALE END ---\n\n")
         except Exception as e:
             messagebox.showerror("Sale Log Error", f"Could not write to sales file: {e}")
-
         # 3. Save updated product stock
         self.save_products()
-        
         # Create sale_record for receipt window
         sale_record = {
             "sale_id": sale_id, "timestamp": timestamp, "items": self.cart,
             "subtotal": subtotal, "tax": total - subtotal, "total": total,
             "cash_tendered": tendered
         }
-
         # 4. Show receipt
         ReceiptWindow(self.root, sale_record)
-        
         # 5. Reset for next sale
         self.cart = []
         self.update_cart_display()
@@ -397,16 +514,19 @@ class POSApp:
         self.load_data() # Reload from file to ensure consistency
         self.update_product_display()
 
+    # --- IMS SYNC STUB (for future API/file integration) ---
+    def sync_ims_stock(self, product_id, new_stock):
+        """Stub: Sync stock with IMS (to be implemented with API or file integration)."""
+        # Example: send update to IMS API or write to file
+        pass
+
 # --- HELPER DIALOGS & WINDOWS ---
 class ProductManager(tk.Toplevel):
     """A Toplevel window for managing the product list."""
-    # This class would contain the full CRUD for products
-    # For brevity in this single file, a simplified version is shown.
-    # A full implementation would have its own Add/Edit dialogs.
     def __init__(self, parent, products, refresh_callback, save_callback):
         super().__init__(parent)
         self.title("Product Management")
-        self.geometry("800x600")
+        self.geometry("1000x600")
         self.transient(parent)
         self.grab_set()
         self.products = products
@@ -417,54 +537,75 @@ class ProductManager(tk.Toplevel):
     def create_prod_widgets(self):
         btn_frame = ttk.Frame(self, padding=10)
         btn_frame.pack(fill='x')
-        ttk.Button(btn_frame, text="Add New Product", command=self.add_product).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text="Add New Item", command=self.add_product).pack(side='left', padx=5)
         ttk.Button(btn_frame, text="Edit Selected", command=self.edit_product).pack(side='left', padx=5)
         ttk.Button(btn_frame, text="Delete Selected", command=self.delete_product, style="Danger.TButton").pack(side='left', padx=5)
-        ttk.Button(btn_frame, text="Import Products", command=self.import_products).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text="Import Items", command=self.import_products).pack(side='left', padx=5)
         ttk.Button(btn_frame, text="Save to File", command=self.save, style="Success.TButton").pack(side='right', padx=5)
 
         # Treeview to display products
-        cols = ('id', 'name', 'price', 'stock')
+        cols = ('id', 'name', 'category', 'type', 'price', 'stock', 'unit', 'description')
         self.prod_tree = ttk.Treeview(self, columns=cols, show='headings')
-        self.prod_tree.heading('id', text='ID')
-        self.prod_tree.heading('name', text='Name')
-        self.prod_tree.heading('price', text='Price')
-        self.prod_tree.heading('stock', text='Stock')
+        for col, label in zip(cols, ["ID", "Name", "Category", "Type", "Price", "Stock", "Unit", "Description"]):
+            self.prod_tree.heading(col, text=label)
         self.prod_tree.pack(fill='both', expand=True, padx=10, pady=10)
-        
         self.refresh_prod_list()
 
     def refresh_prod_list(self):
         for i in self.prod_tree.get_children():
             self.prod_tree.delete(i)
         for p in self.products:
-            self.prod_tree.insert('', 'end', values=(p['id'], p['name'], f"{p['price']:.2f}", p['stock']))
+            self.prod_tree.insert('', 'end', values=(
+                p.get('id', ''),
+                p.get('name', ''),
+                p.get('category', ''),
+                p.get('type', 'product'),
+                f"{p.get('price', 0.0):.2f}",
+                p.get('stock', 0) if p.get('type', 'product') == 'product' else '',
+                p.get('unit', '') if p.get('type', 'product') == 'product' else '',
+                p.get('description', '')
+            ))
 
     def add_product(self):
-        # A real implementation would use a dialog
-        # For this example, we add a placeholder
-        new_id = "prod_" + str(uuid.uuid4())[:4]
-        new_product = {'id': new_id, 'name': 'New Product', 'price': 0.0, 'stock': 0}
-        self.products.append(new_product)
+        EditProductDialog(self, None, self.add_product_callback)
+
+    def add_product_callback(self, _, new_data):
+        self.products.append(new_data)
         self.refresh_prod_list()
 
     def edit_product(self):
         selected = self.prod_tree.selection()
         if not selected:
-            messagebox.showwarning("No Selection", "Please select a product to edit.")
+            messagebox.showwarning("No Selection", "Please select an item to edit.")
             return
         item_id = selected[0]
         values = self.prod_tree.item(item_id, 'values')
-        # Show edit dialog
-        EditProductDialog(self, values, self.update_product)
+        # Map values to dict
+        product = {
+            'id': values[0],
+            'name': values[1],
+            'category': values[2],
+            'type': values[3],
+            'price': float(values[4]),
+            'stock': int(values[5]) if values[5] else 0,
+            'unit': values[6],
+            'description': values[7]
+        }
+        EditProductDialog(self, product, self.update_product)
+
+    def update_product(self, old_id, new_data):
+        for i, p in enumerate(self.products):
+            if p['id'] == old_id:
+                self.products[i] = new_data
+                break
+        self.refresh_prod_list()
 
     def delete_product(self):
         selected = self.prod_tree.selection()
         if not selected:
-            messagebox.showwarning("No Selection", "Please select a product to delete.")
+            messagebox.showwarning("No Selection", "Please select an item to delete.")
             return
-        
-        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete the selected product(s)?"):
+        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete the selected item(s)?"):
             for item_id in selected:
                 values = self.prod_tree.item(item_id, 'values')
                 self.products = [p for p in self.products if p['id'] != values[0]]
@@ -472,98 +613,136 @@ class ProductManager(tk.Toplevel):
 
     def save(self):
         if self.save_callback():
-            messagebox.showinfo("Success", "Products saved successfully.")
+            messagebox.showinfo("Success", "Items saved successfully.")
             self.refresh_callback()
         else:
-            messagebox.showerror("Error", "Failed to save products.")
-
-    def update_product(self, old_id, new_data):
-        for p in self.products:
-            if p['id'] == old_id:
-                p['id'] = new_data['id']
-                p['name'] = new_data['name']
-                p['price'] = float(new_data['price'])
-                p['stock'] = int(new_data['stock'])
-                break
-        self.refresh_prod_list()
+            messagebox.showerror("Error", "Failed to save items.")
 
     def import_products(self):
-        file_path = filedialog.askopenfilename(title="Import Products", filetypes=[("Text Files", "*.txt"), ("JSON Files", "*.json"), ("All Files", "*.*")])
+        file_path = filedialog.askopenfilename(title="Import Items", filetypes=[("Text Files", "*.txt"), ("JSON Files", "*.json"), ("All Files", "*.*")])
         if not file_path:
             return
         try:
             imported = 0
-            # Try JSON first
-            if file_path.endswith('.json') or file_path.endswith('.txt'):
+            if file_path.endswith('.json'):
+                import json
                 with open(file_path, 'r', encoding='utf-8') as f:
-                    try:
-                        import json
-                        data = json.load(f)
-                        if isinstance(data, list):
-                            for item in data:
-                                prod_id = item.get('product_id') or item.get('id') or f"prod_{uuid.uuid4().hex[:4]}"
-                                name = item.get('name', 'Unknown')
-                                price = float(item.get('price', 0.0))
-                                stock = int(item.get('stock', item.get('quantity', 0)))
-                                if not any(p['id'] == prod_id for p in self.products):
-                                    self.products.append({'id': prod_id, 'name': name, 'price': price, 'stock': stock})
-                                    imported += 1
-                            self.refresh_prod_list()
-                            self.save_callback()
-                            self.refresh_callback()
-                            messagebox.showinfo("Import Complete", f"Imported {imported} products from JSON.")
-                            return
-                    except Exception:
-                        pass  # Not JSON, try as text
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        for item in data:
+                            prod_id = item.get('id') or item.get('product_id') or f"prod_{uuid.uuid4().hex[:8]}"
+                            name = item.get('name', 'Unknown')
+                            category = item.get('category', '')
+                            type_ = item.get('type', 'product')
+                            price = float(item.get('price', 0.0))
+                            stock = int(item.get('stock', 0))
+                            unit = item.get('unit', 'pcs')
+                            description = item.get('description', '')
+                            if not any(p['id'] == prod_id for p in self.products):
+                                self.products.append({'id': prod_id, 'name': name, 'category': category, 'type': type_, 'price': price, 'stock': stock, 'unit': unit, 'description': description})
+                                imported += 1
+                        self.refresh_prod_list()
+                        self.save_callback()
+                        self.refresh_callback()
+                        messagebox.showinfo("Import Complete", f"Imported {imported} items from JSON.")
+                        return
             # Try pipe-delimited text
             with open(file_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     if not line.strip(): continue
                     parts = line.strip().split('|')
-                    if len(parts) >= 4:
+                    if len(parts) == 4:
                         prod_id, name, price, stock = parts[:4]
                         if not any(p['id'] == prod_id for p in self.products):
-                            self.products.append({'id': prod_id, 'name': name, 'price': float(price), 'stock': int(stock)})
+                            self.products.append({'id': prod_id, 'name': name, 'category': '', 'type': 'product', 'price': float(price), 'stock': int(stock), 'unit': 'pcs', 'description': ''})
                             imported += 1
-                self.refresh_prod_list()
-                self.save_callback()
-                self.refresh_callback()
-                messagebox.showinfo("Import Complete", f"Imported {imported} products from text file.")
+                    elif len(parts) >= 8:
+                        prod_id, name, category, type_, price, stock, unit, description = parts[:8]
+                        if not any(p['id'] == prod_id for p in self.products):
+                            self.products.append({'id': prod_id, 'name': name, 'category': category, 'type': type_, 'price': float(price), 'stock': int(stock), 'unit': unit, 'description': description})
+                            imported += 1
+            self.refresh_prod_list()
+            self.save_callback()
+            self.refresh_callback()
+            messagebox.showinfo("Import Complete", f"Imported {imported} items from text file.")
         except Exception as e:
-            messagebox.showerror("Import Error", f"Failed to import products: {e}")
+            messagebox.showerror("Import Error", f"Failed to import items: {e}")
 
 class EditProductDialog(tk.Toplevel):
-    def __init__(self, parent, values, callback):
+    def __init__(self, parent, product, callback):
         super().__init__(parent)
-        self.title("Edit Product")
-        self.geometry("400x300")
+        self.title("Edit Item" if product else "Add New Item")
+        self.geometry("500x600")
         self.transient(parent)
         self.grab_set()
         self.callback = callback
-        self.old_id = values[0]
-        tk.Label(self, text="Product ID:").pack(pady=5)
-        self.id_entry = tk.Entry(self)
-        self.id_entry.pack(pady=5)
-        self.id_entry.insert(0, values[0])
-        tk.Label(self, text="Name:").pack(pady=5)
-        self.name_entry = tk.Entry(self)
-        self.name_entry.pack(pady=5)
-        self.name_entry.insert(0, values[1])
-        tk.Label(self, text="Price:").pack(pady=5)
-        self.price_entry = tk.Entry(self)
-        self.price_entry.pack(pady=5)
-        self.price_entry.insert(0, values[2])
-        tk.Label(self, text="Stock:").pack(pady=5)
-        self.stock_entry = tk.Entry(self)
-        self.stock_entry.pack(pady=5)
-        self.stock_entry.insert(0, values[3])
-        ttk.Button(self, text="Save", command=self.save).pack(pady=15)
+        self.old_id = product['id'] if product else None
+        # Fields
+        self.id_var = tk.StringVar(value=product['id'] if product else f"prod_{uuid.uuid4().hex[:8]}")
+        self.name_var = tk.StringVar(value=product['name'] if product else "")
+        self.category_var = tk.StringVar(value=product['category'] if product else "")
+        self.type_var = tk.StringVar(value=product['type'] if product else "product")
+        self.price_var = tk.StringVar(value=str(product['price']) if product else "0.0")
+        self.stock_var = tk.StringVar(value=str(product['stock']) if product and product['type'] == 'product' else "0")
+        self.unit_var = tk.StringVar(value=product['unit'] if product and product['type'] == 'product' else "pcs")
+        self.description_var = tk.StringVar(value=product['description'] if product else "")
+        # Layout
+        row = 0
+        tk.Label(self, text="Product ID:").grid(row=row, column=0, sticky='e', padx=10, pady=8)
+        tk.Entry(self, textvariable=self.id_var).grid(row=row, column=1, sticky='w', padx=10, pady=8)
+        row += 1
+        tk.Label(self, text="Name:").grid(row=row, column=0, sticky='e', padx=10, pady=8)
+        tk.Entry(self, textvariable=self.name_var).grid(row=row, column=1, sticky='w', padx=10, pady=8)
+        row += 1
+        tk.Label(self, text="Category:").grid(row=row, column=0, sticky='e', padx=10, pady=8)
+        tk.Entry(self, textvariable=self.category_var).grid(row=row, column=1, sticky='w', padx=10, pady=8)
+        row += 1
+        tk.Label(self, text="Type:").grid(row=row, column=0, sticky='e', padx=10, pady=8)
+        type_combo = ttk.Combobox(self, textvariable=self.type_var, values=["product", "service", "subscription", "booking", "digital"], state="readonly")
+        type_combo.grid(row=row, column=1, sticky='w', padx=10, pady=8)
+        type_combo.bind("<<ComboboxSelected>>", self.toggle_fields)
+        row += 1
+        tk.Label(self, text="Price:").grid(row=row, column=0, sticky='e', padx=10, pady=8)
+        tk.Entry(self, textvariable=self.price_var).grid(row=row, column=1, sticky='w', padx=10, pady=8)
+        row += 1
+        self.stock_label = tk.Label(self, text="Stock:")
+        self.stock_entry = tk.Entry(self, textvariable=self.stock_var)
+        self.unit_label = tk.Label(self, text="Unit:")
+        self.unit_entry = ttk.Combobox(self, textvariable=self.unit_var, values=["pcs", "kg", "g", "L", "ml", "pack", "box", "hour", "service", "other"])
+        self.stock_label.grid(row=row, column=0, sticky='e', padx=10, pady=8)
+        self.stock_entry.grid(row=row, column=1, sticky='w', padx=10, pady=8)
+        row += 1
+        self.unit_label.grid(row=row, column=0, sticky='e', padx=10, pady=8)
+        self.unit_entry.grid(row=row, column=1, sticky='w', padx=10, pady=8)
+        row += 1
+        tk.Label(self, text="Description:").grid(row=row, column=0, sticky='e', padx=10, pady=8)
+        tk.Entry(self, textvariable=self.description_var).grid(row=row, column=1, sticky='w', padx=10, pady=8)
+        row += 1
+        ttk.Button(self, text="Save", command=self.save).grid(row=row, column=0, columnspan=2, pady=20)
+        self.toggle_fields()
+    def toggle_fields(self, event=None):
+        t = self.type_var.get()
+        if t == 'product':
+            self.stock_label.grid()
+            self.stock_entry.grid()
+            self.unit_label.grid()
+            self.unit_entry.grid()
+        else:
+            self.stock_label.grid_remove()
+            self.stock_entry.grid_remove()
+            self.unit_label.grid_remove()
+            self.unit_entry.grid_remove()
     def save(self):
+        t = self.type_var.get()
         new_data = {
-            'id': self.id_entry.get(),
-            'name': self.name_entry.get(),
-            'price': self.price_entry.get(),
-            'stock': self.stock_entry.get()
+            'id': self.id_var.get(),
+            'name': self.name_var.get(),
+            'category': self.category_var.get(),
+            'type': t,
+            'price': float(self.price_var.get()),
+            'stock': int(self.stock_var.get()) if t == 'product' else 0,
+            'unit': self.unit_var.get() if t == 'product' else '',
+            'description': self.description_var.get()
         }
         self.callback(self.old_id, new_data)
         self.destroy()
